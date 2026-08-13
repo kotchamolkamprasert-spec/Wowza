@@ -1,0 +1,672 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+<title>67 Speed | ปลูกป่าไปด้วยกัน — บูธวันวิทยาศาสตร์</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&family=Sarabun:wght@300;400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg-0:#081611; --bg-1:#0d2018; --panel:#11291f;
+    --line: rgba(111,227,136,0.16);
+    --leaf: #6fe388; --leaf-deep:#2f9e5c;
+    --gold: #ffc857; --coral: #ff6b5b;
+    --mist: #eaf4ec; --mist-dim: rgba(234,244,236,0.62); --mist-faint: rgba(234,244,236,0.34);
+    --radius: 18px;
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; height:100%; width:100%; overflow:hidden;
+    background: radial-gradient(1200px 800px at 15% -10%, rgba(111,227,136,0.10), transparent 60%),
+                radial-gradient(900px 600px at 100% 0%, rgba(255,200,87,0.07), transparent 55%), var(--bg-0);
+    color: var(--mist); font-family: 'Sarabun', sans-serif; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+  }
+  h1,h2,h3,.display{ font-family:'Kanit', sans-serif; }
+  .num{ font-family:'JetBrains Mono', monospace; }
+
+  .kiosk{ height:100%; width:100%; display:flex; flex-direction:column; padding: clamp(10px,1.4vh,18px) clamp(12px,1.6vw,22px); gap: clamp(8px,1.2vh,14px); }
+
+  .topbar{ display:flex; align-items:center; justify-content:space-between; gap:14px; flex:0 0 auto; }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .glyph{ font-size: clamp(20px,2.4vh,28px); }
+  .brand h1{ font-size: clamp(15px,2vh,21px); font-weight:800; margin:0; line-height:1.15; }
+  .brand h1 span{ color: var(--leaf); }
+  .brand .tag{ font-size: clamp(10px,1.05vh,12px); color:var(--gold); letter-spacing:.08em; text-transform:uppercase; font-weight:600; }
+  .engine-pill{ display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 14px; font-size: clamp(9.5px,1.05vh,11.5px); color:var(--mist-dim); }
+  .engine-pill b{ color:var(--leaf); font-weight:600; }
+  .community{ display:flex; align-items:center; gap:9px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding: 6px 16px 6px 8px; }
+  .community .dot{ width: clamp(24px,3vh,32px); height: clamp(24px,3vh,32px); border-radius:50%; background:conic-gradient(from 180deg, var(--leaf), var(--gold), var(--leaf)); display:flex; align-items:center; justify-content:center; font-size: clamp(12px,1.5vh,15px); flex-shrink:0; }
+  .community b{ font-size: clamp(10.5px,1.2vh,12.5px); display:block; }
+  .community small{ color:var(--mist-dim); font-size: clamp(9px,1.05vh,11px); }
+
+  .stage{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns: 1.5fr 1fr; gap: clamp(10px,1.4vh,16px); }
+  @media (max-aspect-ratio: 4/5){ .stage{ grid-template-columns: 1fr; grid-template-rows: 1.3fr 1fr; } }
+
+  .card{ background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); overflow:hidden; min-height:0; }
+
+  .cam-card{ position:relative; display:flex; flex-direction:column; min-height:0; }
+  .cam-viewport{ position:relative; flex:1; min-height:0; background:#04100b; }
+  .cam-mirror{ position:absolute; inset:0; transform: scaleX(-1); }
+  video, canvas.overlay{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  video{ opacity:.92; }
+
+  .cam-placeholder{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap: clamp(10px,1.6vh,16px); background: radial-gradient(600px 380px at 50% 30%, rgba(111,227,136,0.10), transparent), var(--bg-1); text-align:center; padding: 20px; z-index:6; }
+  .cam-placeholder .glyph{ font-size: clamp(36px,6vh,56px); filter: drop-shadow(0 0 16px rgba(111,227,136,.35)); }
+
+  .btn{ font-family:'Kanit',sans-serif; font-weight:600; font-size: clamp(14px,1.7vh,17px); padding: clamp(12px,1.7vh,16px) clamp(22px,2.8vw,32px); border-radius:14px; border:1px solid transparent; cursor:pointer; transition: transform .12s ease, filter .12s ease; }
+  .btn:active{ transform: scale(.97); }
+  .btn-primary{ background: linear-gradient(135deg, var(--leaf), var(--leaf-deep)); color:#052012; }
+  .btn-primary:hover{ filter:brightness(1.08); }
+  .btn-ghost{ background:rgba(8,22,17,.55); color:var(--mist); border-color: var(--line); backdrop-filter: blur(6px); }
+  .btn-sm{ padding: 8px 16px; font-size:13px; }
+
+  .hud{ position:absolute; left: clamp(10px,1.4vw,18px); top: clamp(10px,1.4vh,18px); right: clamp(10px,1.4vw,18px); display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; z-index:3; }
+  .hud-count{ background: rgba(8,22,17,0.72); backdrop-filter: blur(6px); border:1px solid rgba(111,227,136,0.28); border-radius:14px; padding: clamp(6px,1vh,10px) clamp(12px,1.6vw,18px); display:flex; align-items:baseline; gap:8px; }
+  .hud-count .n{ font-size: clamp(24px,4vh,38px); font-weight:700; color:var(--leaf); line-height:1; }
+  .hud-count .lbl{ font-size: clamp(9.5px,1.1vh,12px); color:var(--mist-dim); text-transform:uppercase; letter-spacing:.08em; }
+  .hud-right{ display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
+  .hud-level{ background: rgba(8,22,17,0.72); backdrop-filter: blur(6px); border:1px solid rgba(255,200,87,0.3); border-radius:14px; padding: clamp(6px,1vh,10px) clamp(10px,1.4vw,16px); text-align:right; }
+  .hud-level .lv{ font-size: clamp(11px,1.4vh,14px); font-weight:600; color:var(--gold); }
+  .hud-level .lvname{ font-size: clamp(9.5px,1.1vh,12px); color:var(--mist-dim); }
+  .hud-perf{ background: rgba(8,22,17,0.55); border:1px solid var(--line); border-radius:10px; padding: 4px 10px; font-size: clamp(8.5px,1vh,10.5px); color:var(--mist-faint); }
+  .hud-perf b{ color:var(--mist-dim); }
+
+  .timer-badge{ position:absolute; top: clamp(10px,1.4vh,18px); left:50%; transform:translateX(-50%); z-index:4; display:none; flex-direction:column; align-items:center; justify-content:center; background: rgba(8,22,17,0.75); backdrop-filter: blur(6px); border:2px solid rgba(111,227,136,0.4); border-radius:16px; padding: 6px 20px; line-height:1; transition: border-color .2s, background .2s; }
+  .timer-badge .timer-num{ font-family:'JetBrains Mono',monospace; font-size: clamp(26px,4.4vh,42px); font-weight:700; color:var(--leaf); }
+  .timer-badge .timer-lbl{ font-size: clamp(8.5px,1vh,10.5px); color:var(--mist-dim); text-transform:uppercase; letter-spacing:.1em; margin-top:2px; }
+  .timer-badge.low{ border-color: rgba(255,107,91,0.7); background: rgba(40,10,8,0.75); animation: timerPulse 1s infinite; }
+  .timer-badge.low .timer-num{ color: var(--coral); }
+  @keyframes timerPulse{ 0%,100%{ transform:translateX(-50%) scale(1);} 50%{ transform:translateX(-50%) scale(1.08);} }
+
+  .hint-line{ position:absolute; left:50%; bottom: clamp(38px,6vh,54px); transform:translateX(-50%); z-index:3; background:rgba(8,22,17,0.62); border:1px solid var(--line); border-radius:99px; padding:6px 16px; font-size: clamp(11px,1.3vh,13px); color:var(--mist-dim); white-space:nowrap; backdrop-filter: blur(6px); }
+  .swing-meter{ position:absolute; left: clamp(10px,1.4vw,18px); right: clamp(10px,1.4vw,18px); bottom: clamp(12px,1.6vh,18px); height:8px; border-radius:99px; background:rgba(255,255,255,0.08); overflow:hidden; z-index:3; display:flex; gap:4px; }
+  .swing-meter .half{ flex:1; border-radius:99px; overflow:hidden; background:rgba(255,255,255,0.06); position:relative; }
+  .swing-meter .half i{ position:absolute; left:0; top:0; bottom:0; width:50%; background:linear-gradient(90deg, var(--coral), var(--gold), var(--leaf)); transition: width .06s linear; }
+
+  .success-overlay{ position:absolute; inset:0; z-index:8; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background: radial-gradient(600px 400px at 50% 45%, rgba(111,227,136,.28), rgba(4,16,11,.94)); opacity:0; pointer-events:none; transition: opacity .5s ease; text-align:center; padding:20px; }
+  .success-overlay.show{ opacity:1; pointer-events:auto; }
+  .success-overlay .g{ font-size: clamp(42px,7vh,64px); }
+  .success-overlay h2{ margin:0; font-size: clamp(19px,2.8vh,27px); color:var(--leaf); }
+  .success-overlay p{ margin:0; color:var(--mist-dim); font-size: clamp(11.5px,1.5vh,14px); max-width:420px; }
+  .success-overlay .submit-row{ display:flex; gap:8px; align-items:center; margin-top:6px; }
+  .success-overlay input{ font-family:'Sarabun',sans-serif; background:rgba(255,255,255,.08); border:1px solid var(--line); border-radius:10px; padding:9px 12px; color:var(--mist); font-size:13px; width:150px; text-align:center; }
+  .success-overlay input::placeholder{ color: var(--mist-faint); }
+
+  .staff-controls{ position:absolute; right: clamp(8px,1.2vw,14px); bottom: clamp(8px,1.2vh,14px); z-index:5; display:flex; gap:6px; opacity:.25; transition:opacity .2s; }
+  .staff-controls:hover{ opacity:1; }
+  .staff-btn{ font-size:10.5px; padding:6px 10px; border-radius:8px; background:rgba(8,22,17,.7); border:1px solid var(--line); color:var(--mist-dim); cursor:pointer; }
+
+  .side{ display:flex; flex-direction:column; gap: clamp(7px,1.1vh,12px); min-height:0; }
+  .tree-card{ flex:1.05; display:flex; flex-direction:column; padding: clamp(9px,1.3vh,14px); min-height:0; }
+  .tree-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:5px; flex:0 0 auto; }
+  .tree-head h2{ font-size: clamp(10.5px,1.25vh,13px); margin:0; font-weight:600; color:var(--mist-dim); }
+  .tree-stage-name{ font-size: clamp(14px,1.9vh,19px); font-weight:700; color:var(--leaf); }
+  .tree-scene{ position:relative; flex:1; min-height:0; background: radial-gradient(360px 220px at 50% 100%, rgba(111,227,136,0.10), transparent), var(--bg-1); border-radius:14px; overflow:hidden; border:1px solid rgba(111,227,136,0.12); }
+  .tree-scene svg{ position:absolute; bottom:-4px; left:0; width:100%; height:100%; }
+  .tree-group{ opacity:0; transform: translateY(6px) scale(.96); transform-origin:130px 220px; transition: opacity .5s ease, transform .5s cubic-bezier(.2,.9,.3,1.2); }
+  .tree-group.active{ opacity:1; transform: translateY(0) scale(1); }
+  .firefly{ animation: floaty 3.4s ease-in-out infinite; }
+  .firefly:nth-child(2){ animation-delay:.8s; } .firefly:nth-child(3){ animation-delay:1.6s; }
+  @keyframes floaty{ 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(-9px);} }
+
+  .progress-track{ margin: clamp(6px,1vh,10px) 2px 4px; flex:0 0 auto; height:8px; border-radius:99px; background:rgba(255,255,255,0.06); overflow:hidden; }
+  .progress-fill{ height:100%; background: linear-gradient(90deg, var(--leaf-deep), var(--leaf)); border-radius:99px; transition: width .4s ease; }
+  .progress-note{ font-size: clamp(9.5px,1.1vh,11.5px); color:var(--mist-faint); display:flex; justify-content:space-between; margin-top:4px; flex:0 0 auto; }
+  .level-dots{ display:flex; gap:5px; margin-top:7px; flex:0 0 auto; }
+  .level-dots .d{ flex:1; height: clamp(18px,2.4vh,25px); border-radius:8px; background:var(--bg-1); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size: clamp(10px,1.3vh,14px); opacity:.5; transition: all .3s ease; }
+  .level-dots .d.done{ opacity:1; background: linear-gradient(135deg, var(--leaf), var(--leaf-deep)); border-color:transparent; }
+
+  .stats-card{ flex:0 0 auto; padding: clamp(7px,1.1vh,11px) clamp(9px,1.3vh,13px); display:grid; grid-template-columns: repeat(4,1fr); gap:7px; }
+  .stat-box{ background: var(--bg-1); border:1px solid var(--line); border-radius:10px; padding: clamp(5px,.9vh,8px) 5px; text-align:center; }
+  .stat-box .v{ font-size: clamp(13px,1.8vh,18px); font-weight:700; color:var(--mist); }
+  .stat-box .k{ font-size: clamp(7.5px,.9vh,9.5px); color:var(--mist-dim); margin-top:1px; line-height:1.2; }
+
+  .lb-card{ flex:0 0 auto; padding: clamp(8px,1.1vh,12px) clamp(10px,1.3vh,14px); }
+  .lb-card h2{ font-size: clamp(10.5px,1.2vh,12.5px); margin:0 0 6px; font-weight:600; color:var(--mist-dim); display:flex; justify-content:space-between; }
+  .lb-row{ display:flex; align-items:center; gap:8px; font-size: clamp(10.5px,1.2vh,12.5px); padding:3px 0; }
+  .lb-row .rk{ width:16px; color:var(--gold); font-family:'JetBrains Mono',monospace; font-weight:700; flex-shrink:0; }
+  .lb-row .nm{ flex:1; color:var(--mist-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lb-row .sc{ font-family:'JetBrains Mono',monospace; color:var(--leaf); font-weight:600; }
+  .lb-empty{ font-size:11.5px; color:var(--mist-faint); }
+
+  .bottombar{ flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  .bottombar .steps{ display:flex; gap:14px; font-size: clamp(9.5px,1.1vh,12px); color:var(--mist-faint); flex-wrap:wrap; }
+  .bottombar .steps b{ color:var(--mist-dim); font-weight:600; }
+  .toggle-row{ display:flex; align-items:center; gap:8px; font-size: clamp(9.5px,1.1vh,11.5px); color:var(--mist-dim); flex-shrink:0; }
+  .toggle{ width:32px; height:18px; border-radius:99px; background:var(--bg-1); border:1px solid var(--line); position:relative; cursor:pointer; }
+  .toggle i{ position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:var(--mist-faint); transition: all .18s ease; }
+  .toggle.on{ background: rgba(111,227,136,.25); border-color: var(--leaf); }
+  .toggle.on i{ left:16px; background: var(--leaf); }
+
+  #power-overlay{ position:fixed; inset:0; z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; background: radial-gradient(900px 600px at 50% 30%, rgba(111,227,136,0.14), transparent), var(--bg-0); text-align:center; padding:30px; }
+  #power-overlay .glyph{ font-size:52px; filter: drop-shadow(0 0 20px rgba(111,227,136,.4)); }
+  #power-overlay h1{ font-size:clamp(21px,3.2vh,30px); margin:0; }
+  #power-overlay h1 span{ color:var(--leaf); }
+  #power-overlay p{ color:var(--mist-dim); max-width:480px; font-size:13.5px; line-height:1.6; margin:0; }
+  #power-overlay .techline{ color:var(--mist-faint); max-width:480px; font-size:11.5px; line-height:1.6; font-family:'JetBrains Mono',monospace; }
+  #power-overlay .err{ color:var(--coral); font-size:13px; min-height:18px; }
+
+  #toast-zone{ position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:50; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; }
+  .toast{ font-family:'Kanit',sans-serif; background: linear-gradient(135deg, rgba(111,227,136,.18), rgba(255,200,87,.10)); border:1px solid rgba(111,227,136,.45); backdrop-filter: blur(10px); border-radius:14px; padding:10px 20px; display:flex; align-items:center; gap:10px; box-shadow: 0 12px 30px rgba(0,0,0,.35); animation: toastIn .45s cubic-bezier(.2,.9,.3,1.2), toastOut .5s ease 2.6s forwards; }
+  .toast .icon{ font-size:22px; } .toast .t1{ font-weight:700; font-size:13.5px; color: var(--leaf); } .toast .t2{ font-size:11px; color: var(--mist-dim); }
+  @keyframes toastIn{ from{ opacity:0; transform:translateY(-14px) scale(.9);} to{opacity:1; transform:translateY(0) scale(1);} }
+  @keyframes toastOut{ to{ opacity:0; transform:translateY(-10px) scale(.95);} }
+  .leaf-particle{ position:fixed; top:-20px; font-size:16px; z-index:49; pointer-events:none; animation: fall linear forwards; }
+  @keyframes fall{ to{ transform: translateY(110vh) rotate(360deg); opacity:.2; } }
+</style>
+</head>
+<body>
+<div id="toast-zone"></div>
+
+<div id="power-overlay">
+  <div class="glyph">🌱</div>
+  <h1>67 Speed — <span>ปลูกป่าไปด้วยกัน</span></h1>
+  <p>บูธกล้องตั้งโต๊ะสำหรับงานวันวิทยาศาสตร์ — ยืนให้เห็นตั้งแต่หัวไหล่ถึงสะโพก ทันทีที่กล้องจับตัวได้จะเริ่มจับเวลา <b style="color:var(--leaf)">20 วินาที</b> โยกแขนสองข้างขึ้น-ลงสลับกันตามท่าไวรัล 67 ให้เร็วที่สุด — <b style="color:var(--gold)">ยิ่งทำเยอะ ยิ่งโต ไม่มีขีดจำกัด</b> จนกลายเป็นผืนป่า วัดกันตรงจำนวนจังหวะ ลุ้นทำลายสถิติสูงสุดของบูธนี้!</p>
+  <div class="techline">Powered by MediaPipe Pose Landmarker (33 keypoints, on-device WASM) — ประมวลผลในเบราว์เซอร์ทั้งหมด ไม่มีการอัปโหลดวิดีโอขึ้นเซิร์ฟเวอร์</div>
+  <button class="btn btn-primary" id="powerBtn">▶ เปิดกล้อง เริ่มบูธ</button>
+  <div class="err" id="powerErr"></div>
+</div>
+
+<div class="kiosk">
+  <div class="topbar">
+    <div class="brand">
+      <span class="glyph">🌲</span>
+      <div>
+        <h1>67 Speed — <span>ปลูกป่าไปด้วยกัน</span></h1>
+        <div class="tag">วันวิทยาศาสตร์ · เพื่อความยั่งยืน</div>
+      </div>
+    </div>
+    <div class="engine-pill">⚙️ <b>Pose Landmarker</b> · on-device · <span id="fpsPill">-- ms/frame</span></div>
+    <div class="community">
+      <div class="dot">🌍</div>
+      <div><b>ป่าแห่งวันนี้ (รวมทุกคน)</b><small id="communityTotal">0 จังหวะ · ปลูกสำเร็จ 0 ต้น</small></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="card cam-card">
+      <div class="cam-viewport" id="camViewport">
+        <div class="cam-mirror">
+          <video id="video" playsinline muted></video>
+          <canvas class="overlay" id="overlay"></canvas>
+        </div>
+
+        <div class="hud" id="hud" style="display:none;">
+          <div class="hud-count"><span class="n num" id="hudCount">0</span><span class="lbl">จังหวะรวม</span></div>
+          <div class="hud-right">
+            <div class="hud-level"><div class="lv">🏆 สถิติสูงสุด</div><div class="lvname" id="hudRecord">ยังไม่มี</div></div>
+            <div class="hud-perf"><b id="latencyVal">--</b> ms/frame · <span id="fpsVal">--</span> fps</div>
+          </div>
+        </div>
+
+        <div class="timer-badge" id="timerBadge"><div class="timer-num" id="timerNum">20</div><div class="timer-lbl">วินาที</div></div>
+
+        <div class="hint-line" id="hintLine" style="display:none;">ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา 20 วิทันทีที่กล้องจับตัวได้</div>
+        <div class="swing-meter" id="swingMeter" style="display:none;">
+          <div class="half"><i id="swingFillL" style="width:50%"></i></div>
+          <div class="half"><i id="swingFillR" style="width:50%"></i></div>
+        </div>
+
+        <div class="success-overlay" id="successOverlay">
+          <div class="g" id="successEmoji">🏆🌲</div>
+          <h2 id="successTitle">ปลูกป่าสำเร็จแล้ว!</h2>
+          <p id="successDesc">ทำได้ <b class="num" id="successCount">0</b> จังหวะในรอบนี้ — ส่งคะแนนขึ้นกระดานของบูธนี้ได้ (ไม่ส่งข้อมูลใดออกนอกเครื่อง) หรือข้ามได้เลย</p>
+          <div class="submit-row">
+            <input id="lbName" type="text" placeholder="ชื่อเล่น (ไม่บังคับ)" maxlength="16" />
+            <button class="btn btn-primary btn-sm" id="lbSubmitBtn">บันทึกคะแนน</button>
+            <button class="btn btn-ghost btn-sm" id="lbSkipBtn">ข้าม</button>
+          </div>
+        </div>
+
+        <div class="cam-placeholder" id="camPlaceholder" style="display:none;">
+          <div class="glyph">🧍</div>
+          <h2>กำลังเตรียมกล้อง…</h2>
+        </div>
+
+        <div class="staff-controls">
+          <button class="staff-btn" id="restartCamBtn">รีสตาร์ทกล้อง</button>
+          <button class="staff-btn" id="resetRoundBtn">เริ่มรอบใหม่</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card tree-card">
+        <div class="tree-head"><h2>ต้นไม้ของคุณ</h2><div class="tree-stage-name num" id="liveCountBig">0 จังหวะ</div></div>
+        <div class="tree-scene">
+          <svg viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="130" cy="228" rx="95" ry="12" fill="#0a2318"/>
+            <g class="tree-group" data-stage="0">
+              <ellipse cx="130" cy="214" rx="10" ry="7" fill="#8a5a2b"/>
+              <circle cx="130" cy="196" r="3" fill="#ffc857"/><circle cx="140" cy="204" r="1.6" fill="#ffc857"/><circle cx="120" cy="206" r="1.6" fill="#ffc857"/>
+            </g>
+            <g class="tree-group" data-stage="1">
+              <path d="M130 220 L130 188" stroke="#4fbf74" stroke-width="4" stroke-linecap="round" fill="none"/>
+              <path d="M130 198 Q114 194 112 182" stroke="#4fbf74" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <path d="M130 206 Q146 200 150 190" stroke="#4fbf74" stroke-width="4" fill="none" stroke-linecap="round"/>
+            </g>
+            <g class="tree-group" data-stage="2">
+              <rect x="124" y="168" width="12" height="55" rx="5" fill="#7a5230"/>
+              <circle cx="130" cy="150" r="34" fill="#3aa564"/><circle cx="130" cy="150" r="34" fill="url(#gradA)" opacity=".5"/>
+            </g>
+            <g class="tree-group" data-stage="3">
+              <rect x="121" y="150" width="16" height="75" rx="6" fill="#6f4a2a"/>
+              <circle cx="104" cy="132" r="30" fill="#369a5d"/><circle cx="156" cy="132" r="30" fill="#369a5d"/><circle cx="130" cy="112" r="36" fill="#42b56f"/>
+              <circle cx="82" cy="150" r="4" fill="#eaf4ec" opacity=".8"/>
+            </g>
+            <g class="tree-group" data-stage="4">
+              <rect x="117" y="140" width="24" height="88" rx="8" fill="#5f3f24"/>
+              <path d="M129 178 Q95 168 78 140" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <path d="M131 172 Q166 160 182 132" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <circle cx="78" cy="128" r="26" fill="#2f9e5c"/><circle cx="182" cy="120" r="28" fill="#2f9e5c"/>
+              <circle cx="129" cy="150" r="38" fill="#379e5c"/><circle cx="129" cy="96" r="46" fill="#4fc17a"/>
+              <circle cx="100" cy="80" r="4.5" fill="#ffc857"/><circle cx="160" cy="86" r="4.5" fill="#ffc857"/><circle cx="130" cy="60" r="4.5" fill="#ffc857"/>
+              <circle cx="90" cy="115" r="3.5" fill="#ffffff" opacity=".85"/><circle cx="168" cy="105" r="3.5" fill="#ffffff" opacity=".85"/>
+            </g>
+            <g class="tree-group" data-stage="5">
+              <rect x="30" y="185" width="12" height="42" rx="5" fill="#5f3f24"/><circle cx="36" cy="172" r="24" fill="#2f9e5c"/>
+              <rect x="212" y="178" width="13" height="49" rx="5" fill="#5f3f24"/><circle cx="219" cy="160" r="28" fill="#2f9e5c"/>
+              <rect x="117" y="130" width="26" height="98" rx="9" fill="#5f3f24"/>
+              <path d="M129 168 Q92 156 74 128" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <path d="M131 162 Q170 148 188 118" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <circle cx="74" cy="116" r="27" fill="#2f9e5c"/><circle cx="188" cy="106" r="29" fill="#2f9e5c"/>
+              <circle cx="129" cy="140" r="40" fill="#379e5c"/><circle cx="129" cy="82" r="50" fill="#57c983"/>
+              <circle class="firefly" cx="95" cy="70" r="3" fill="#ffe08a"/><circle class="firefly" cx="165" cy="60" r="3" fill="#ffe08a"/><circle class="firefly" cx="130" cy="40" r="3" fill="#ffe08a"/>
+              <circle cx="60" cy="150" r="3" fill="#ffc857"/><circle cx="200" cy="145" r="3" fill="#ffc857"/>
+            </g>
+            <defs><radialGradient id="gradA"><stop offset="0%" stop-color="#7fe89b"/><stop offset="100%" stop-color="#2f9e5c" stop-opacity="0"/></radialGradient></defs>
+          </svg>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="progress-note"><span id="progressText">0 จังหวะ</span><span>ไม่จำกัด — ยิ่งเยอะยิ่งเป็นป่าใหญ่</span></div>
+      </div>
+
+      <div class="card stats-card">
+        <div class="stat-box"><div class="v num" id="statTotal">0</div><div class="k">จังหวะ<br/>รอบนี้</div></div>
+        <div class="stat-box"><div class="v num" id="statBest">0</div><div class="k">คอมโบ<br/>สูงสุด</div></div>
+        <div class="stat-box"><div class="v num" id="statTime">0:00</div><div class="k">เวลา<br/>ที่เล่น</div></div>
+        <div class="stat-box"><div class="v num" id="statTrees">0</div><div class="k">ปลูกสำเร็จ<br/>วันนี้</div></div>
+      </div>
+
+      <div class="card lb-card">
+        <h2>🏆 กระดานคะแนนบูธนี้ <span style="font-weight:400;">(เก็บในเครื่องนี้เท่านั้น)</span></h2>
+        <div id="lbList"><div class="lb-empty">ยังไม่มีใครส่งคะแนน — ปลูกป่าให้สำเร็จเพื่อขึ้นบอร์ด!</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div class="steps">
+      <span><b>1.</b> ยืนห่างกล้อง ให้เห็นไหล่ถึงสะโพก — จับเวลา 20 วิทันที</span>
+      <span><b>2.</b> โยกแขนสองข้างสลับขึ้น-ลงต่อเนื่อง ยิ่งทำเยอะ ยิ่งโต</span>
+      <span><b>3.</b> ไม่มีจำกัด ยิ่งทำเยอะ ยิ่งเป็นป่าใหญ่ ลุ้นทำลายสถิติของบูธ!</span>
+    </div>
+    <div class="toggle-row">เสียง <div class="toggle on" id="soundToggle"><i></i></div></div>
+  </div>
+</div>
+
+<script type="module">
+import { PoseLandmarker, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+
+/* ================= config ================= */
+const TREE_STAGE_NEEDS = [0, 8, 18, 32, 50, 75]; // reps needed for each visual growth stage (no labels/levels shown to player)
+const TREE_MAX = TREE_STAGE_NEEDS[TREE_STAGE_NEEDS.length - 1];
+const SESSION_DURATION = 20; // seconds — tree grows live while you do the 67 move
+function stageForCount(c){ let s = 0; for(let i=0;i<TREE_STAGE_NEEDS.length;i++){ if(c >= TREE_STAGE_NEEDS[i]) s = i; } return s; }
+// Pose landmark indices (BlazePose / MediaPipe Pose, 33 keypoints)
+const L_SH=11, R_SH=12, L_HIP=23, R_HIP=24, L_WR=15, R_WR=16, L_EL=13, R_EL=14;
+const POSE_CONNECTIONS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24]];
+
+const ENTER_RATIO = 0.08;   // hysteresis: 8% of shoulder-to-hip (torso) length
+const EXIT_RATIO  = 0.04;   // return-to-neutral buffer (half of enter threshold)
+const REP_COOLDOWN_MS = 90;
+const SUCCESS_HOLD_MS = 10000;
+
+/* ================= state ================= */
+let poseLandmarker = null;
+let running = false;
+let rafId = null;
+let count = 0, bestCombo = 0, comboStreak = 0, currentStage = 0;
+let startTime = null;
+let soundOn = true;
+let audioCtx = null;
+let lastPersonSeenTime = performance.now();
+let latencyEMA = null;
+let treesPlantedToday = Number(localStorage.getItem('t67p_treesToday') || 0);
+let communityTotal = Number(localStorage.getItem('t67p_communityTotal') || 0);
+
+// timed 20-second challenge session
+let sessionState = 'WAITING'; // WAITING -> RUNNING -> ENDED
+let timeLeft = SESSION_DURATION;
+let sessionTimerInterval = null;
+
+// per-wrist adaptive extremum + hysteresis state
+function newWristTracker(){ return { refY:null, state:'NEUTRAL' }; }
+let wristL = newWristTracker();
+let wristR = newWristTracker();
+
+/* ================= DOM ================= */
+const $ = id => document.getElementById(id);
+const video=$('video'), overlay=$('overlay'), ctx=overlay.getContext('2d');
+const powerOverlay=$('power-overlay'), powerBtn=$('powerBtn'), powerErr=$('powerErr');
+const hud=$('hud'), hudCount=$('hudCount'), hudRecord=$('hudRecord');
+const latencyVal=$('latencyVal'), fpsVal=$('fpsVal'), fpsPill=$('fpsPill');
+const hintLine=$('hintLine'), swingMeter=$('swingMeter'), swingFillL=$('swingFillL'), swingFillR=$('swingFillR');
+const timerBadge=$('timerBadge'), timerNum=$('timerNum');
+const successOverlay=$('successOverlay'), successEmoji=$('successEmoji'), successTitle=$('successTitle'), successDesc=$('successDesc'), successCount=$('successCount'), lbName=$('lbName'), lbSubmitBtn=$('lbSubmitBtn'), lbSkipBtn=$('lbSkipBtn');
+const liveCountBig=$('liveCountBig'), progressFill=$('progressFill'), progressText=$('progressText');
+const statTotal=$('statTotal'), statBest=$('statBest'), statTime=$('statTime'), statTrees=$('statTrees');
+const communityTotalEl=$('communityTotal'), soundToggle=$('soundToggle'), toastZone=$('toast-zone');
+const treeGroups=document.querySelectorAll('.tree-group');
+const restartCamBtn=$('restartCamBtn'), resetRoundBtn=$('resetRoundBtn'), lbList=$('lbList');
+
+statTrees.textContent = treesPlantedToday;
+communityTotalEl.textContent = `${communityTotal} จังหวะ · ปลูกสำเร็จ ${treesPlantedToday} ต้น`;
+setTreeStage(0); renderLeaderboard();
+
+function setTreeStage(stage){
+  treeGroups.forEach(g=>g.classList.toggle('active', Number(g.dataset.stage)===stage));
+}
+
+/* ================= leaderboard (local only) ================= */
+function getLeaderboard(){ try{ return JSON.parse(localStorage.getItem('t67p_leaderboard')||'[]'); }catch(e){ return []; } }
+function getRecord(){ const b = getLeaderboard(); return b.length ? b[0] : null; }
+function renderLeaderboard(){
+  const board = getLeaderboard();
+  if(board.length===0){
+    lbList.innerHTML = '<div class="lb-empty">ยังไม่มีใครส่งคะแนน — เล่นให้จบรอบเพื่อขึ้นบอร์ด!</div>';
+    hudRecord.textContent = 'ยังไม่มี';
+    return;
+  }
+  lbList.innerHTML = board.slice(0,5).map((e,i)=>
+    `<div class="lb-row"><span class="rk">#${i+1}</span><span class="nm">${escapeHtml(e.name||'ผู้เล่นนิรนาม')}</span><span class="sc num">${e.count}</span></div>`
+  ).join('');
+  hudRecord.textContent = `${board[0].count} จังหวะ`;
+}
+function escapeHtml(s){ return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function submitScore(name){
+  const board = getLeaderboard();
+  board.push({ name: (name||'').trim().slice(0,16), count, ts: Date.now() });
+  board.sort((a,b)=> b.count - a.count);
+  localStorage.setItem('t67p_leaderboard', JSON.stringify(board.slice(0,10)));
+  renderLeaderboard();
+}
+
+/* ================= audio ================= */
+function ensureAudio(){ if(!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)(); if(audioCtx.state==='suspended') audioCtx.resume(); }
+function tone(freq,dur=0.09,type='sine',gain=0.05,delay=0){
+  if(!soundOn) return; ensureAudio();
+  const t0=audioCtx.currentTime+delay, osc=audioCtx.createOscillator(), g=audioCtx.createGain();
+  osc.type=type; osc.frequency.setValueAtTime(freq,t0);
+  g.gain.setValueAtTime(0,t0); g.gain.linearRampToValueAtTime(gain,t0+0.01); g.gain.exponentialRampToValueAtTime(0.001,t0+dur);
+  osc.connect(g); g.connect(audioCtx.destination); osc.start(t0); osc.stop(t0+dur+0.02);
+}
+const playCountTone = () => tone(420+(count%12)*22, 0.08,'sine',0.045);
+const playLevelUpChord = () => [523.25,659.25,783.99,1046.5].forEach((f,i)=>tone(f,0.35,'triangle',0.05,i*0.07));
+
+/* ================= toast / particles ================= */
+function showToast(icon,t1,t2){
+  const el=document.createElement('div'); el.className='toast';
+  el.innerHTML=`<div class="icon">${icon}</div><div><div class="t1">${t1}</div><div class="t2">${t2}</div></div>`;
+  toastZone.appendChild(el); setTimeout(()=>el.remove(),3200);
+}
+function leafBurst(n=16){
+  const emojis=['🍃','🌿','✨','🍀'];
+  for(let i=0;i<n;i++){
+    const s=document.createElement('div'); s.className='leaf-particle'; s.textContent=emojis[Math.floor(Math.random()*emojis.length)];
+    s.style.left=Math.random()*100+'vw'; s.style.fontSize=(13+Math.random()*13)+'px'; s.style.animationDuration=(2.1+Math.random()*1.6)+'s';
+    document.body.appendChild(s); setTimeout(()=>s.remove(),4000);
+  }
+}
+
+/* ================= level logic ================= */
+function updateTree(){
+  const newStage = stageForCount(count);
+  if(newStage !== currentStage){
+    currentStage = newStage;
+    setTreeStage(currentStage);
+    if(currentStage > 0 && currentStage % 2 === 0) leafBurst(8); // light feedback every couple of growth steps
+  }
+  // growth is uncapped — once the forest stage is reached, keep sparkling every 20 reps to show it's still counting
+  if(count >= TREE_MAX && count % 20 === 0) leafBurst(6);
+  const pct = Math.min(100, (count / TREE_MAX) * 100);
+  progressFill.style.width = pct + '%';
+  progressText.textContent = `${count} จังหวะ`;
+  liveCountBig.textContent = `${count} จังหวะ`;
+}
+
+let successTimer=null;
+
+function startSessionTimer(){
+  sessionState = 'RUNNING';
+  timeLeft = SESSION_DURATION;
+  timerBadge.classList.remove('low');
+  updateTimerDisplay();
+  if(sessionTimerInterval) clearInterval(sessionTimerInterval);
+  sessionTimerInterval = setInterval(()=>{
+    timeLeft -= 1;
+    updateTimerDisplay();
+    if(timeLeft <= 0){
+      clearInterval(sessionTimerInterval);
+      if(sessionState === 'RUNNING') endSession('TIMEUP');
+    }
+  }, 1000);
+}
+function updateTimerDisplay(){
+  timerNum.textContent = Math.max(0, timeLeft);
+  timerBadge.classList.toggle('low', timeLeft <= 5);
+}
+
+function endSession(reason){
+  if(sessionState === 'ENDED') return;
+  sessionState = 'ENDED';
+  if(sessionTimerInterval) clearInterval(sessionTimerInterval);
+  timerBadge.style.display = 'none';
+
+  const record = getRecord();
+  const isNewRecord = count > 0 && (!record || count > record.count);
+
+  if(count >= TREE_MAX){
+    treesPlantedToday += 1;
+    localStorage.setItem('t67p_treesToday', treesPlantedToday);
+    statTrees.textContent = treesPlantedToday;
+    communityTotalEl.textContent = `${communityTotal} จังหวะ · ปลูกสำเร็จ ${treesPlantedToday} ต้น`;
+  }
+
+  successEmoji.textContent = isNewRecord ? '🏆🌲' : '⏱️🌳';
+  successTitle.textContent = 'หมดเวลา 20 วินาที!';
+  successDesc.innerHTML = `ทำได้ <b class="num" id="successCount">${count}</b> จังหวะ`
+    + (isNewRecord ? ` — <b style="color:var(--gold)">ทำลายสถิติสูงสุดของบูธนี้!</b> 🎉` : record ? ` — สถิติสูงสุดของบูธตอนนี้คือ <b class="num">${record.count}</b> จังหวะ ลองเอาชนะดูใหม่!` : ` — เป็นคนแรกที่ตั้งสถิติของบูธนี้!`)
+    + ` ส่งคะแนนขึ้นกระดานได้เลย (ไม่ส่งข้อมูลออกนอกเครื่อง)`;
+
+  lbName.value = '';
+  successOverlay.classList.add('show');
+  successTimer = setTimeout(()=> finishSuccess(false), SUCCESS_HOLD_MS);
+}
+function finishSuccess(submitted){
+  clearTimeout(successTimer);
+  successOverlay.classList.remove('show');
+  resetRound(true);
+}
+lbSubmitBtn.addEventListener('click', ()=>{ submitScore(lbName.value); finishSuccess(true); });
+lbSkipBtn.addEventListener('click', ()=> finishSuccess(false));
+
+/* ================= rep counting: adaptive extremum + hysteresis ================= */
+function processWrist(tracker, wristY, threshold, onFlip){
+  if(tracker.refY === null){ tracker.refY = wristY; return; }
+  const movedUp = tracker.refY - wristY;     // positive = wrist moved up since last extreme
+  const movedDown = wristY - tracker.refY;   // positive = wrist moved down since last extreme
+
+  if(tracker.state !== 'UP' && movedUp > threshold){
+    const wasDown = tracker.state === 'DOWN';
+    tracker.state = 'UP'; tracker.refY = wristY;
+    if(wasDown) onFlip();
+  } else if(tracker.state !== 'DOWN' && movedDown > threshold){
+    const wasUp = tracker.state === 'UP';
+    tracker.state = 'DOWN'; tracker.refY = wristY;
+    if(wasUp) onFlip();
+  } else {
+    // still tracking toward current extreme — keep tightening refY toward the true peak
+    if(tracker.state === 'UP' && wristY < tracker.refY) tracker.refY = wristY;
+    if(tracker.state === 'DOWN' && wristY > tracker.refY) tracker.refY = wristY;
+  }
+}
+
+let lastRepTime = 0;
+function registerRep(){
+  if(sessionState !== 'RUNNING') return;
+  const now = performance.now();
+  if(now - lastRepTime < REP_COOLDOWN_MS) return;
+  lastRepTime = now;
+  count += 1; comboStreak += 1;
+  if(comboStreak > bestCombo) bestCombo = comboStreak;
+  hudCount.textContent = count; statTotal.textContent = count; statBest.textContent = bestCombo;
+  communityTotal += 1; localStorage.setItem('t67p_communityTotal', communityTotal);
+  communityTotalEl.textContent = `${communityTotal} จังหวะ · ปลูกสำเร็จ ${treesPlantedToday} ต้น`;
+  playCountTone(); updateTree(); hintLine.style.display='none';
+}
+
+function processPose(landmarks){
+  if(sessionState === 'ENDED'){ swingMeter.style.display='none'; return; }
+  if(!landmarks){
+    swingMeter.style.display='none';
+    if(sessionState==='WAITING'){ hintLine.textContent='ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา 20 วิทันทีที่กล้องจับตัวได้'; hintLine.style.display='block'; }
+    return;
+  }
+  const shMid = { x:(landmarks[L_SH].x+landmarks[R_SH].x)/2, y:(landmarks[L_SH].y+landmarks[R_SH].y)/2 };
+  const hipMid = { x:(landmarks[L_HIP].x+landmarks[R_HIP].x)/2, y:(landmarks[L_HIP].y+landmarks[R_HIP].y)/2 };
+  const torsoLen = Math.hypot(shMid.x-hipMid.x, shMid.y-hipMid.y);
+  if(torsoLen < 0.05){ hintLine.textContent='ถอยห่างกล้องอีกนิด ให้เห็นลำตัวชัดเจนขึ้น'; hintLine.style.display='block'; return; }
+
+  lastPersonSeenTime = performance.now();
+  hintLine.style.display='none';
+  swingMeter.style.display='flex';
+
+  if(sessionState === 'WAITING'){
+    timerBadge.style.display='flex';
+    startSessionTimer();
+  }
+
+  const enterThresh = ENTER_RATIO * torsoLen;
+  processWrist(wristL, landmarks[L_WR].y, enterThresh, registerRep);
+  processWrist(wristR, landmarks[R_WR].y, enterThresh, registerRep);
+
+  // visual meters: how far each wrist currently is above/below its resting shoulder line
+  const dL = (shMid.y - landmarks[L_WR].y) / (torsoLen*1.4);
+  const dR = (shMid.y - landmarks[R_WR].y) / (torsoLen*1.4);
+  const pctL = Math.max(0, Math.min(100, 50 + dL*50));
+  const pctR = Math.max(0, Math.min(100, 50 + dR*50));
+  swingFillL.style.width = pctL + '%';
+  swingFillR.style.width = pctR + '%';
+}
+
+/* ================= drawing ================= */
+function drawPose(landmarks){
+  ctx.clearRect(0,0,overlay.width,overlay.height);
+  if(!landmarks) return;
+  ctx.strokeStyle='rgba(111,227,136,0.85)'; ctx.lineWidth=4;
+  POSE_CONNECTIONS.forEach(([a,b])=>{
+    ctx.beginPath();
+    ctx.moveTo(landmarks[a].x*overlay.width, landmarks[a].y*overlay.height);
+    ctx.lineTo(landmarks[b].x*overlay.width, landmarks[b].y*overlay.height);
+    ctx.stroke();
+  });
+  [L_SH,R_SH,L_HIP,R_HIP,L_EL,R_EL].forEach(i=>{
+    ctx.beginPath(); ctx.arc(landmarks[i].x*overlay.width, landmarks[i].y*overlay.height, 4,0,Math.PI*2);
+    ctx.fillStyle='#eaf4ec'; ctx.fill();
+  });
+  [L_WR,R_WR].forEach(i=>{
+    ctx.beginPath(); ctx.arc(landmarks[i].x*overlay.width, landmarks[i].y*overlay.height, 7,0,Math.PI*2);
+    ctx.fillStyle='#ffc857'; ctx.fill();
+  });
+}
+
+/* ================= main loop ================= */
+function loop(){
+  if(!running) return;
+  if(video.readyState >= 2){
+    const t0 = performance.now();
+    const result = poseLandmarker.detectForVideo(video, t0);
+    const t1 = performance.now();
+    const frameMs = t1 - t0;
+    latencyEMA = latencyEMA===null ? frameMs : latencyEMA*0.9 + frameMs*0.1;
+    latencyVal.textContent = latencyEMA.toFixed(1);
+    const fps = latencyEMA>0 ? Math.min(60, Math.round(1000/Math.max(latencyEMA,1))) : 0;
+    fpsVal.textContent = fps;
+    fpsPill.textContent = `${latencyEMA.toFixed(0)} ms/frame`;
+
+    const landmarks = (result.landmarks && result.landmarks[0]) ? result.landmarks[0] : null;
+    drawPose(landmarks);
+    processPose(landmarks);
+  }
+  if(startTime){
+    const secs = Math.floor((Date.now()-startTime)/1000);
+    statTime.textContent = Math.floor(secs/60)+':'+String(secs%60).padStart(2,'0');
+  }
+  rafId = requestAnimationFrame(loop);
+}
+
+/* ================= lifecycle ================= */
+async function initModel(){
+  const filesetResolver = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm");
+  const baseConfig = { runningMode:"VIDEO", numPoses:1, minPoseDetectionConfidence:0.5, minPosePresenceConfidence:0.5, minTrackingConfidence:0.5 };
+  const modelUrl = "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task";
+  try{
+    poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, { baseOptions:{ modelAssetPath:modelUrl, delegate:"GPU" }, ...baseConfig });
+  }catch(e){
+    console.warn('GPU delegate failed, falling back to CPU', e);
+    poseLandmarker = await PoseLandmarker.createFromOptions(filesetResolver, { baseOptions:{ modelAssetPath:modelUrl, delegate:"CPU" }, ...baseConfig });
+  }
+}
+
+async function openCamera(){
+  const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ideal:1280}, height:{ideal:720} }, audio:false });
+  video.srcObject = stream;
+  await new Promise(res=>{ video.onloadedmetadata=()=>{ video.play(); res(); }; });
+  overlay.width = video.videoWidth; overlay.height = video.videoHeight;
+}
+
+async function startKiosk(){
+  powerBtn.disabled=true; powerBtn.textContent='กำลังเตรียมกล้อง…'; powerErr.textContent='';
+  try{
+    if(!poseLandmarker) await initModel();
+    await openCamera();
+    running=true; startTime=Date.now(); lastPersonSeenTime=performance.now();
+    hud.style.display='flex'; hintLine.style.display='block';
+    powerOverlay.style.display='none';
+    loop();
+  }catch(err){
+    console.error(err);
+    powerErr.textContent = 'เปิดกล้องไม่สำเร็จ: '+(err.message||err)+' — ตรวจสอบว่าเปิดหน้านี้ผ่าน https:// และอนุญาตกล้องแล้ว';
+    powerBtn.disabled=false; powerBtn.textContent='▶ เปิดกล้อง เริ่มบูธ';
+  }
+}
+async function restartCamera(){
+  running=false; if(rafId) cancelAnimationFrame(rafId);
+  if(video.srcObject){ video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject=null; }
+  try{ await openCamera(); running=true; lastPersonSeenTime=performance.now(); loop(); }catch(e){ console.error('restart failed', e); }
+}
+function resetRound(showToastMsg){
+  count=0; bestCombo=0; comboStreak=0; currentStage=0;
+  wristL=newWristTracker(); wristR=newWristTracker();
+  sessionState='WAITING'; timeLeft=SESSION_DURATION;
+  if(sessionTimerInterval) clearInterval(sessionTimerInterval);
+  timerBadge.style.display='none'; timerBadge.classList.remove('low'); timerNum.textContent=SESSION_DURATION;
+  startTime = running ? Date.now() : null;
+  hudCount.textContent=0;
+  statTotal.textContent=0; statBest.textContent=0; statTime.textContent='0:00';
+  setTreeStage(0);
+  progressFill.style.width='0%'; progressText.textContent='0 จังหวะ'; liveCountBig.textContent='0 จังหวะ';
+  hintLine.textContent='ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา 20 วิทันทีที่กล้องจับตัวได้'; hintLine.style.display='block';
+  if(showToastMsg){ showToast('👋','พร้อมสำหรับคนถัดไปแล้ว','ยืนหน้ากล้องเพื่อเริ่มรอบใหม่'); }
+}
+
+powerBtn.addEventListener('click', ()=>{ ensureAudio(); startKiosk(); });
+restartCamBtn.addEventListener('click', restartCamera);
+resetRoundBtn.addEventListener('click', ()=> resetRound(false));
+soundToggle.addEventListener('click', ()=>{ soundOn=!soundOn; soundToggle.classList.toggle('on', soundOn); });
+</script>
+</body>
+</html>
