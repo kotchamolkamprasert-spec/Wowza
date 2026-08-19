@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>                  <string>Clicker Battle</string>
+    <key>CFBundleDisplayName</key>           <string>Clicker Battle</string>
+    <key>CFBundleIdentifier</key>            <string>local.clicker-battle</string>
+    <key>CFBundleExecutable</key>            <string>clicker</string>
+    <key>CFBundlePackageType</key>           <string>APPL</string>
+    <key>CFBundleVersion</key>               <string>1.0</string>
+    <key>CFBundleShortVersionString</key>    <string>1.0</string>
+    <key>LSMinimumSystemVersion</key>        <string>11.0</string>
+    <key>NSHighResolutionCapable</key>       <true/>
+
+    <!-- Without this key macOS does not deny Bluetooth, it SIGABRTs the
+         process the moment CoreBluetooth is touched. -->
+    <key>NSBluetoothAlwaysUsageDescription</key>
+    <string>Clicker Battle connects to your ESP32 controllers over Bluetooth.</string>
+    <key>NSBluetoothPeripheralUsageDescription</key>
+    <string>Clicker Battle connects to your ESP32 controllers over Bluetooth.</string>
+</dict>
+</plist>
