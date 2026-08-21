@@ -7,7 +7,7 @@ const VISION_BUNDLE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10
 /* ================= config ================= */
 const TREE_STAGE_NEEDS = [0, 10, 25, 50, 100, 125]; // reps needed for each visual growth stage (no labels/levels shown to player)
 const TREE_MAX = TREE_STAGE_NEEDS[TREE_STAGE_NEEDS.length - 1];
-const SESSION_DURATION = 20; // seconds — tree grows live while you do the 67 move
+const SESSION_DURATION = 60; // seconds — tree grows live while you do the 67 move
 function stageForCount(c){ let s = 0; for(let i=0;i<TREE_STAGE_NEEDS.length;i++){ if(c >= TREE_STAGE_NEEDS[i]) s = i; } return s; }
 // Pose landmark indices (BlazePose / MediaPipe Pose, 33 keypoints)
 const L_SH=11, R_SH=12, L_HIP=23, R_HIP=24, L_WR=15, R_WR=16, L_EL=13, R_EL=14;
@@ -20,15 +20,19 @@ const POSE_CONNECTIONS = [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24
    which is far larger than landmark jitter — that is what stops the counter
    from ticking on its own while someone stands still.
    Too strict? Lower SWING_ENTER. Still counting by itself? Raise it. */
-const SWING_ENTER    = 0.12;  // travel past the swing centre needed to register a direction change
+const SWING_ENTER    = 0.10;  // travel past the swing centre needed to register a direction change
 const HANDS_UP_MIN   = -0.85; // wrist height vs the shoulder line (0 = shoulders, -1 is about hip level)
 const MIN_VISIBILITY = 0.60;  // landmark confidence required before a joint is trusted
 const BASELINE_ALPHA = 0.02;  // how fast the swing centre follows the wrist — slow, so it averages out the swing
-const SMOOTH_ALPHA   = 0.50;  // denoising of the raw wrist position — kept light, since heavy
-                              // smoothing shrinks fast swings more than slow ones
-const REP_COOLDOWN_MS = 100;  // a backstop only — the dead band above already blocks rapid
-                              // re-triggering, so this stays clear of a fast player's real rate
-const SUCCESS_HOLD_MS = 10000;
+const SMOOTH_ALPHA   = 0.60;  // denoising of the raw wrist position — kept light, since heavy
+                              // smoothing lags the wrist and shrinks fast swings most
+const REP_COOLDOWN_MS = 55;   // a backstop only — the dead band above already blocks rapid
+                              // re-triggering, so this stays well clear of a fast player's rate
+const MAX_SWING_MS   = 1200;  // a direction change slower than this is swaying or drifting, not a
+                              // rep. Slow sway and a real swing can be the same SIZE, so speed is
+                              // what separates them — this is why gentle rocking scores nothing.
+// The end-of-round panel has no timeout: it stays up until the player chooses
+// "บันทึกคะแนน" or "ข้าม", so a round never rolls over on its own.
 
 /* ================= state ================= */
 let poseLandmarker = null;
@@ -43,13 +47,16 @@ let latencyEMA = null;
 let treesPlantedToday = Number(localStorage.getItem('t67p_treesToday') || 0);
 let communityTotal = Number(localStorage.getItem('t67p_communityTotal') || 0);
 
-// timed 20-second challenge session
-let sessionState = 'WAITING'; // WAITING -> RUNNING -> ENDED
+// timed challenge session (SESSION_DURATION seconds)
+// IDLE is the booth's resting screen: camera preview and leaderboard on show, but
+// nothing counting. A round only begins when someone presses the play button, so
+// the booth never starts a round just because a person walked into frame.
+let sessionState = 'IDLE'; // IDLE -> WAITING -> RUNNING -> ENDED -> IDLE
 let timeLeft = SESSION_DURATION;
 let sessionTimerInterval = null;
 
 // per-wrist adaptive extremum + hysteresis state
-function newWristTracker(){ return { smoothY:null, baseY:null, state:'NEUTRAL' }; }
+function newWristTracker(){ return { smoothY:null, baseY:null, state:'NEUTRAL', lastFlipAt:0 }; }
 let wristL = newWristTracker();
 let wristR = newWristTracker();
 
@@ -67,6 +74,7 @@ const statTotal=$('statTotal'), statBest=$('statBest'), statTime=$('statTime'), 
 const communityTotalEl=$('communityTotal'), soundToggle=$('soundToggle'), toastZone=$('toast-zone');
 const treeGroups=document.querySelectorAll('.tree-group');
 const restartCamBtn=$('restartCamBtn'), resetRoundBtn=$('resetRoundBtn'), lbList=$('lbList');
+const idleOverlay=$('idleOverlay'), idleTitle=$('idleTitle'), idleNote=$('idleNote'), playBtn=$('playBtn');
 
 statTrees.textContent = treesPlantedToday;
 communityTotalEl.textContent = `${communityTotal} จังหวะ · ปลูกสำเร็จ ${treesPlantedToday} ต้น`;
@@ -143,19 +151,24 @@ function updateTree(){
   liveCountBig.textContent = `${count} จังหวะ`;
 }
 
-let successTimer=null;
+// Clearing alone leaves a stale id behind, so null it too: sessionTimerInterval
+// being falsy is then a truthful "no round clock is running".
+function stopSessionTimer(){
+  if(sessionTimerInterval) clearInterval(sessionTimerInterval);
+  sessionTimerInterval = null;
+}
 
 function startSessionTimer(){
   sessionState = 'RUNNING';
   timeLeft = SESSION_DURATION;
   timerBadge.classList.remove('low');
   updateTimerDisplay();
-  if(sessionTimerInterval) clearInterval(sessionTimerInterval);
+  stopSessionTimer();
   sessionTimerInterval = setInterval(()=>{
     timeLeft -= 1;
     updateTimerDisplay();
     if(timeLeft <= 0){
-      clearInterval(sessionTimerInterval);
+      stopSessionTimer();
       if(sessionState === 'RUNNING') endSession('TIMEUP');
     }
   }, 1000);
@@ -168,7 +181,7 @@ function updateTimerDisplay(){
 function endSession(reason){
   if(sessionState === 'ENDED') return;
   sessionState = 'ENDED';
-  if(sessionTimerInterval) clearInterval(sessionTimerInterval);
+  stopSessionTimer();
   timerBadge.style.display = 'none';
 
   const record = getRecord();
@@ -182,22 +195,51 @@ function endSession(reason){
   }
 
   successEmoji.textContent = isNewRecord ? '🏆🌲' : '⏱️🌳';
-  successTitle.textContent = 'หมดเวลา 20 วินาที!';
+  successTitle.textContent = `หมดเวลา ${SESSION_DURATION} วินาที!`;
   successDesc.innerHTML = `ทำได้ <b class="num" id="successCount">${count}</b> จังหวะ`
     + (isNewRecord ? ` — <b style="color:var(--gold)">ทำลายสถิติสูงสุดของบูธนี้!</b> 🎉` : record ? ` — สถิติสูงสุดของบูธตอนนี้คือ <b class="num">${record.count}</b> จังหวะ ลองเอาชนะดูใหม่!` : ` — เป็นคนแรกที่ตั้งสถิติของบูธนี้!`)
     + ` ส่งคะแนนขึ้นกระดานได้เลย (ไม่ส่งข้อมูลออกนอกเครื่อง)`;
 
   lbName.value = '';
   successOverlay.classList.add('show');
-  successTimer = setTimeout(()=> finishSuccess(false), SUCCESS_HOLD_MS);
+  // No auto-dismiss — the next round starts only when a button below is pressed.
 }
 function finishSuccess(submitted){
-  clearTimeout(successTimer);
   successOverlay.classList.remove('show');
   resetRound(true);
 }
-lbSubmitBtn.addEventListener('click', ()=>{ submitScore(lbName.value); finishSuccess(true); });
+// An empty name box means the player did not want to be on the board: send them
+// back to the idle screen without recording anything, same as pressing ข้าม.
+lbSubmitBtn.addEventListener('click', ()=>{
+  const nm = lbName.value.trim();
+  if(!nm){ finishSuccess(false); return; }
+  submitScore(nm); finishSuccess(true);
+});
 lbSkipBtn.addEventListener('click', ()=> finishSuccess(false));
+
+/* ================= idle screen ================= */
+// The resting state between players: preview + leaderboard, nothing counting.
+function showIdle(replay){
+  sessionState = 'IDLE';
+  stopSessionTimer();
+  const rec = getRecord();
+  idleTitle.textContent = replay ? 'จบรอบแล้ว — เล่นอีกไหม?' : 'พร้อมปลูกป่าหรือยัง?';
+  idleNote.textContent = rec ? `สถิติสูงสุดของบูธตอนนี้ ${rec.count} จังหวะ` : 'ยังไม่มีสถิติของบูธ — มาเป็นคนแรกกันเลย!';
+  playBtn.textContent = replay ? '▶ เล่นอีกครั้ง' : '▶ เริ่มเล่น';
+  hintLine.style.display='none';
+  swingMeter.style.display='none';
+  timerBadge.style.display='none';
+  idleOverlay.classList.add('show');
+}
+// Arms the round. The clock still waits for the camera to actually see someone.
+function startPlaying(){
+  idleOverlay.classList.remove('show');
+  wristL=newWristTracker(); wristR=newWristTracker();
+  sessionState = 'WAITING';
+  hintLine.textContent=`ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา ${SESSION_DURATION} วิทันทีที่กล้องจับตัวได้`;
+  hintLine.style.display='block';
+}
+playBtn.addEventListener('click', ()=>{ ensureAudio(); startPlaying(); });
 
 /* ================= rep counting: swing around a drifting centre ================= */
 // Confidence of a landmark, tolerating builds that omit the field entirely.
@@ -222,15 +264,15 @@ function processWrist(tracker, wrist, torsoLen, shoulderY, onFlip){
   if(height < HANDS_UP_MIN){ tracker.state = 'NEUTRAL'; return 0; }
 
   const dev = (tracker.baseY - tracker.smoothY) / torsoLen; // + = above the swing centre
-  if(tracker.state !== 'UP' && dev > SWING_ENTER){
-    const wasDown = tracker.state === 'DOWN';
-    tracker.state = 'UP';
-    if(wasDown) onFlip();   // NEUTRAL -> UP is only arming, never a rep
-  } else if(tracker.state !== 'DOWN' && dev < -SWING_ENTER){
-    const wasUp = tracker.state === 'UP';
-    tracker.state = 'DOWN';
-    if(wasUp) onFlip();
-  }
+  const flip = dir => {
+    const now = performance.now();
+    const brisk = (now - tracker.lastFlipAt) <= MAX_SWING_MS;
+    const scored = tracker.state !== 'NEUTRAL' && tracker.state !== dir; // NEUTRAL only arms
+    tracker.state = dir; tracker.lastFlipAt = now;
+    if(scored && brisk) onFlip();
+  };
+  if(tracker.state !== 'UP' && dev > SWING_ENTER) flip('UP');
+  else if(tracker.state !== 'DOWN' && dev < -SWING_ENTER) flip('DOWN');
   return dev;
 }
 
@@ -249,10 +291,12 @@ function registerRep(){
 }
 
 function processPose(landmarks){
-  if(sessionState === 'ENDED'){ swingMeter.style.display='none'; return; }
+  // IDLE still draws the skeleton preview (that happens in drawPose) but must not
+  // count or start a clock — the booth waits for a deliberate press instead.
+  if(sessionState === 'ENDED' || sessionState === 'IDLE'){ swingMeter.style.display='none'; return; }
   if(!landmarks){
     swingMeter.style.display='none';
-    if(sessionState==='WAITING'){ hintLine.textContent='ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา 20 วิทันทีที่กล้องจับตัวได้'; hintLine.style.display='block'; }
+    if(sessionState==='WAITING'){ hintLine.textContent=`ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา ${SESSION_DURATION} วิทันทีที่กล้องจับตัวได้`; hintLine.style.display='block'; }
     return;
   }
   const shMid = { x:(landmarks[L_SH].x+landmarks[R_SH].x)/2, y:(landmarks[L_SH].y+landmarks[R_SH].y)/2 };
@@ -362,8 +406,9 @@ async function startKiosk(){
     if(!poseLandmarker) await initModel();
     await openCamera();
     running=true; startTime=Date.now(); lastPersonSeenTime=performance.now();
-    hud.style.display='flex'; hintLine.style.display='block';
+    hud.style.display='flex';
     powerOverlay.style.display='none';
+    showIdle(false);   // land on the resting screen, not straight into a round
     loop();
   }catch(err){
     console.error(err);
@@ -377,18 +422,22 @@ async function restartCamera(){
   try{ await openCamera(); running=true; lastPersonSeenTime=performance.now(); loop(); }catch(e){ console.error('restart failed', e); }
 }
 function resetRound(showToastMsg){
+  // Also clears the end-of-round panel, so the staff "เริ่มรอบใหม่" button can
+  // always recover a booth left waiting on a player who walked off.
+  successOverlay.classList.remove('show');
   count=0; bestCombo=0; comboStreak=0; currentStage=0;
   wristL=newWristTracker(); wristR=newWristTracker();
-  sessionState='WAITING'; timeLeft=SESSION_DURATION;
-  if(sessionTimerInterval) clearInterval(sessionTimerInterval);
+  timeLeft=SESSION_DURATION;
+  stopSessionTimer();
   timerBadge.style.display='none'; timerBadge.classList.remove('low'); timerNum.textContent=SESSION_DURATION;
   startTime = running ? Date.now() : null;
   hudCount.textContent=0;
   statTotal.textContent=0; statBest.textContent=0; statTime.textContent='0:00';
   setTreeStage(0);
   progressFill.style.width='0%'; progressText.textContent='0 จังหวะ'; liveCountBig.textContent='0 จังหวะ';
-  hintLine.textContent='ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา 20 วิทันทีที่กล้องจับตัวได้'; hintLine.style.display='block';
-  if(showToastMsg){ showToast('👋','พร้อมสำหรับคนถัดไปแล้ว','ยืนหน้ากล้องเพื่อเริ่มรอบใหม่'); }
+  // Back to the resting screen — never straight into another round.
+  showIdle(!!showToastMsg);
+  if(showToastMsg){ showToast('👋','บันทึกรอบนี้เรียบร้อย','กด "เล่นอีกครั้ง" เมื่อพร้อมสำหรับคนถัดไป'); }
 }
 
 powerBtn.addEventListener('click', ()=>{ ensureAudio(); startKiosk(); });
