@@ -1,0 +1,85 @@
+# Exported by three-d-stage
+newmtl topsoil_dark
+Kd 0.0513 0.0262 0.0144
+Ks 0.2000 0.2000 0.2000
+Ns 16
+d 1.0000
+
+newmtl topsoil_damp
+Kd 0.0865 0.0437 0.0194
+Ks 0.2000 0.2000 0.2000
+Ns 16
+d 1.0000
+
+newmtl subsoil_sand
+Kd 0.5972 0.3712 0.1714
+Ks 0.2000 0.2000 0.2000
+Ns 16
+d 1.0000
+
+newmtl subsoil_clay
+Kd 0.3325 0.1046 0.0307
+Ks 0.2000 0.2000 0.2000
+Ns 16
+d 1.0000
+
+newmtl subsoil_clay_0
+Kd 0.3325 0.1046 0.0307
+Ks 0.2000 0.2000 0.2000
+Ns 16
+d 1.0000
+
+newmtl subsoil_sand_1
+Kd 0.5972 0.3712 0.1714
+Ks 0.2000 0.2000 0.2000
+Ns 16
+d 1.0000
+
+newmtl bedrock_deep
+Kd 0.1413 0.1746 0.1981
+Ks 0.2000 0.2000 0.2000
+Ns 60
+d 1.0000
+
+newmtl bedrock_grey
+Kd 0.2051 0.2423 0.2623
+Ks 0.2000 0.2000 0.2000
+Ns 60
+d 1.0000
+
+newmtl stone
+Kd 0.2582 0.2961 0.3095
+Ks 0.2000 0.2000 0.2000
+Ns 16
+d 1.0000
+
+newmtl seed_shell
+Kd 0.2542 0.1022 0.0331
+Ks 0.2000 0.2000 0.2000
+Ns 90
+d 1.0000
+
+newmtl seed_scar
+Kd 0.1095 0.0423 0.0137
+Ks 0.2000 0.2000 0.2000
+Ns 90
+d 1.0000
+
+newmtl seed_tip
+Kd 0.5271 0.2961 0.1441
+Ks 0.2000 0.2000 0.2000
+Ns 90
+d 1.0000
+
+newmtl sprout_stem
+Kd 0.0762 0.1946 0.0356
+Ks 0.2000 0.2000 0.2000
+Ns 50
+d 1.0000
+
+newmtl sprout_leaf
+Kd 0.2232 0.4735 0.0953
+Ks 0.2000 0.2000 0.2000
+Ns 50
+d 1.0000
+
