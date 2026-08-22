@@ -1,0 +1,2 @@
+# Carnival Clicker - Windows + macOS, Python 3.9 or newer
+pyserial>=3.5
