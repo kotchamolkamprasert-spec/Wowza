@@ -84,7 +84,18 @@
   .success-overlay input{ font-family:'Sarabun',sans-serif; background:rgba(255,255,255,.08); border:1px solid var(--line); border-radius:10px; padding:9px 12px; color:var(--mist); font-size:13px; width:150px; text-align:center; }
   .success-overlay input::placeholder{ color: var(--mist-faint); }
 
-  .staff-controls{ position:absolute; right: clamp(8px,1.2vw,14px); bottom: clamp(8px,1.2vh,14px); z-index:5; display:flex; gap:6px; opacity:.25; transition:opacity .2s; }
+  /* Resting screen between players. Deliberately translucent so the live camera
+     preview stays visible behind the call to action. */
+  .idle-overlay{ position:absolute; inset:0; z-index:7; display:flex; flex-direction:column; align-items:center; justify-content:center; gap: clamp(6px,1vh,11px); background: linear-gradient(rgba(4,16,11,.52), rgba(4,16,11,.80)); opacity:0; pointer-events:none; transition: opacity .35s ease; text-align:center; padding:20px; }
+  .idle-overlay.show{ opacity:1; pointer-events:auto; }
+  .idle-overlay .g{ font-size: clamp(34px,5.5vh,52px); filter: drop-shadow(0 0 18px rgba(111,227,136,.4)); }
+  .idle-overlay h2{ margin:0; font-size: clamp(18px,2.7vh,26px); color:var(--leaf); }
+  .idle-overlay p{ margin:0; color:var(--gold); font-size: clamp(11.5px,1.5vh,14px); font-weight:600; }
+  .idle-overlay .idle-hint{ color:var(--mist-dim); font-size: clamp(10.5px,1.25vh,12.5px); max-width:380px; line-height:1.5; }
+
+  /* above .success-overlay (z-index 8) — that panel now waits indefinitely for a
+     player's choice, so staff must still be able to reach these controls */
+  .staff-controls{ position:absolute; right: clamp(8px,1.2vw,14px); bottom: clamp(8px,1.2vh,14px); z-index:9; display:flex; gap:6px; opacity:.25; transition:opacity .2s; }
   .staff-controls:hover{ opacity:1; }
   .staff-btn{ font-size:10.5px; padding:6px 10px; border-radius:8px; background:rgba(8,22,17,.7); border:1px solid var(--line); color:var(--mist-dim); cursor:pointer; }
 
