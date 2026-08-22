@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Carnival Clicker</title>
+<link rel="stylesheet" href="style.css">
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js" } }
+</script>
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+<div id="vignette"></div>
+
+<!-- ---------------------------------------------------------- HOME -->
+<section id="home" class="screen active">
+  <div class="glow"></div>
+  <h1 class="logo">CARNIVAL<span>CLICKER</span></h1>
+  <p class="tag">Hammer the button. Finish the build. Beat the board.</p>
+  <button class="big" id="startBtn">START</button>
+  <p class="hint">press <kbd>Space</kbd> or a controller button</p>
+
+  <div class="boards">
+    <div class="board mini">
+      <h3>TODAY&rsquo;S BEST &mdash; SOLO &amp; VERSUS</h3>
+      <ol id="homeBoard"><li class="empty">no scores yet</li></ol>
+    </div>
+    <div class="board mini">
+      <h3>TODAY&rsquo;S BEST &mdash; CO-OP TEAMS</h3>
+      <ol id="homeTeams"><li class="empty">no scores yet</li></ol>
+    </div>
+  </div>
+</section>
+
+<!-- --------------------------------------------------------- SETUP -->
+<section id="setup" class="screen">
+  <h2>WHO IS PLAYING?</h2>
+
+  <div class="modes">
+    <button class="mode sel" data-mode="solo">
+      <span class="mi">&#127919;</span><b>SOLO</b>
+      <em>just you against the clock</em>
+    </button>
+    <button class="mode" data-mode="versus">
+      <span class="mi">&#9876;</span><b>HEAD TO HEAD</b>
+      <em>two players, one winner</em>
+    </button>
+    <button class="mode" data-mode="coop">
+      <span class="mi">&#129309;</span><b>CO-OP</b>
+      <em>both build the same thing</em>
+    </button>
+  </div>
+
+  <div class="names">
+    <label class="p1"><span id="p1label">PLAYER 1</span>
+      <input id="n1" maxlength="12" placeholder="name" autocomplete="off"></label>
+    <label class="p2" id="p2wrap"><span>PLAYER 2</span>
+      <input id="n2" maxlength="12" placeholder="name" autocomplete="off"></label>
+  </div>
+
+  <div class="row">
+    <button class="ghost" data-goto="home">BACK</button>
+    <button class="big" id="goBtn">GO</button>
+  </div>
+  <p class="hint" id="linkHint">checking controllers&hellip;</p>
+  <p class="build">build 3 &mdash; solo / head to head / co-op</p>
+</section>
+
+<!-- ----------------------------------------------------- COUNTDOWN -->
+<section id="countdown" class="screen">
+  <div id="countNum">3</div>
+</section>
+
+<!-- ---------------------------------------------------------- PLAY -->
+<section id="play" class="screen">
+  <div class="hud">
+    <div class="timer"><span id="clock">60</span><em>seconds</em></div>
+  </div>
+  <div class="tracks" id="tracks"></div>
+</section>
+
+<!-- -------------------------------------------------------- RESULT -->
+<section id="result" class="screen">
+  <h2 id="resultTitle">TIME!</h2>
+  <div id="resultBody" class="result-body"></div>
+  <div class="row">
+    <button class="big" id="againBtn">PLAY AGAIN</button>
+    <button class="ghost" data-goto="home">HOME</button>
+  </div>
+</section>
+
+<!-- --------------------------------------------------- LEADERBOARD -->
+<section id="leaderboard" class="screen">
+  <h2>LEADERBOARD</h2>
+  <div class="boards">
+    <div class="board">
+      <h3>SOLO &amp; VERSUS</h3>
+      <ol id="fullBoard"></ol>
+    </div>
+    <div class="board">
+      <h3>CO-OP TEAMS</h3>
+      <ol id="fullTeams"></ol>
+    </div>
+  </div>
+  <button class="ghost" data-goto="home">HOME</button>
+</section>
+
+<div id="link" class="link-pill"><i></i><span>controllers</span></div>
+
+<script type="module" src="game.js"></script>
+</body>
+</html>
