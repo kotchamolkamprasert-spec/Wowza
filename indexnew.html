@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+<title>67 Speed | ปลูกป่าไปด้วยกัน — บูธวันวิทยาศาสตร์</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&family=Sarabun:wght@300;400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="toast-zone"></div>
+
+<div id="power-overlay">
+  <div class="glyph">🌱</div>
+  <h1>67 Speed — <span>ปลูกป่าไปด้วยกัน</span></h1>
+  <p>บูธกล้องตั้งโต๊ะสำหรับงานวันวิทยาศาสตร์ — ยืนให้เห็นตั้งแต่หัวไหล่ถึงสะโพก ทันทีที่กล้องจับตัวได้จะเริ่มจับเวลา <b style="color:var(--leaf)">30 หรือ 60 วินาที</b> (เลือกได้ด้านล่าง และเปลี่ยนได้อีกที่หน้าจอพักก่อนเริ่มแต่ละรอบ) โยกแขนสองข้างขึ้น-ลงสลับกันตามท่าไวรัล 67 ให้เร็วที่สุด — <b style="color:var(--gold)">ยิ่งทำเยอะ ยิ่งโต ไม่มีขีดจำกัด</b> จนกลายเป็นผืนป่า วัดกันตรงจำนวนจังหวะ ลุ้นทำลายสถิติสูงสุดของบูธนี้!</p>
+  <div class="techline">Powered by MediaPipe Pose Landmarker (33 keypoints, on-device WASM) — ประมวลผลในเบราว์เซอร์ทั้งหมด ไม่มีการอัปโหลดวิดีโอขึ้นเซิร์ฟเวอร์</div>
+  <div class="dur-choose">
+    <span>เลือกความยาวรอบ</span>
+    <div class="duration-pick" id="durationPickPower">
+      <button class="dur-btn" type="button" data-sec="30">30 วินาที</button>
+      <button class="dur-btn" type="button" data-sec="60">60 วินาที</button>
+    </div>
+  </div>
+  <button class="btn btn-primary" id="powerBtn">▶ เปิดกล้อง เริ่มบูธ</button>
+  <div class="err" id="powerErr"></div>
+</div>
+
+<div class="kiosk">
+  <div class="topbar">
+    <div class="brand">
+      <span class="glyph">🌲</span>
+      <div>
+        <h1>67 Speed — <span>ปลูกป่าไปด้วยกัน</span></h1>
+        <div class="tag">วันวิทยาศาสตร์ · เพื่อความยั่งยืน</div>
+      </div>
+    </div>
+    <div class="engine-pill">⚙️ <b>Pose Landmarker</b> · on-device · <span id="fpsPill">-- ms/frame</span></div>
+    <div class="community">
+      <div class="dot">🌍</div>
+      <div><b>ป่าแห่งวันนี้ (รวมทุกคน)</b><small id="communityTotal">0 จังหวะ · ปลูกสำเร็จ 0 ต้น</small></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="card cam-card">
+      <div class="cam-viewport" id="camViewport">
+        <div class="cam-mirror">
+          <video id="video" playsinline muted></video>
+          <canvas class="overlay" id="overlay"></canvas>
+        </div>
+
+        <div class="hud" id="hud" style="display:none;">
+          <div class="hud-count"><span class="n num" id="hudCount">0</span><span class="lbl">จังหวะรวม</span></div>
+          <div class="hud-right">
+            <div class="hud-level"><div class="lv">🏆 สถิติสูงสุด</div><div class="lvname" id="hudRecord">ยังไม่มี</div></div>
+            <div class="hud-perf"><b id="latencyVal">--</b> ms/frame · <span id="fpsVal">--</span> fps</div>
+          </div>
+        </div>
+
+        <div class="timer-badge" id="timerBadge"><div class="timer-num" id="timerNum">30</div><div class="timer-lbl">วินาที</div></div>
+
+        <div class="hint-line" id="hintLine" style="display:none;">ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา 30 วิทันทีที่กล้องจับตัวได้</div>
+        <div class="swing-meter" id="swingMeter" style="display:none;">
+          <div class="half"><i id="swingFillL" style="width:50%"></i></div>
+          <div class="half"><i id="swingFillR" style="width:50%"></i></div>
+        </div>
+
+        <div class="success-overlay" id="successOverlay">
+          <div class="g" id="successEmoji">🏆🌲</div>
+          <h2 id="successTitle">ปลูกป่าสำเร็จแล้ว!</h2>
+          <p id="successDesc">ทำได้ <b class="num" id="successCount">0</b> จังหวะในรอบนี้ — ส่งคะแนนขึ้นกระดานของบูธนี้ได้ (ไม่ส่งข้อมูลใดออกนอกเครื่อง) หรือข้ามได้เลย</p>
+          <div class="submit-row">
+            <input id="lbName" type="text" placeholder="ชื่อเล่น (ไม่บังคับ)" maxlength="16" />
+            <button class="btn btn-primary btn-sm" id="lbSubmitBtn">บันทึกคะแนน</button>
+            <button class="btn btn-ghost btn-sm" id="lbSkipBtn">ข้าม</button>
+          </div>
+        </div>
+
+        <div class="idle-overlay" id="idleOverlay">
+          <div class="g">🌳</div>
+          <h2 id="idleTitle">พร้อมปลูกป่าหรือยัง?</h2>
+          <p id="idleNote">ยังไม่มีสถิติของบูธ — มาเป็นคนแรกกันเลย!</p>
+          <div class="duration-pick" id="durationPick">
+            <button class="dur-btn" type="button" data-sec="30">30 วินาที</button>
+            <button class="dur-btn" type="button" data-sec="60">60 วินาที</button>
+          </div>
+          <button class="btn btn-primary" id="playBtn">▶ เริ่มเล่น</button>
+          <div class="idle-hint" id="idleHint">ยืนให้เห็นหัวไหล่ถึงสะโพก เลือกความยาวรอบ แล้วกดปุ่มเพื่อเริ่มจับเวลา</div>
+        </div>
+
+        <div class="cam-placeholder" id="camPlaceholder" style="display:none;">
+          <div class="glyph">🧍</div>
+          <h2>กำลังเตรียมกล้อง…</h2>
+        </div>
+
+        <div class="staff-controls">
+          <button class="staff-btn" id="restartCamBtn">รีสตาร์ทกล้อง</button>
+          <button class="staff-btn" id="resetRoundBtn">เริ่มรอบใหม่</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card tree-card">
+        <div class="tree-head"><h2>ต้นไม้ของคุณ</h2><div class="tree-stage-name num" id="liveCountBig">0 จังหวะ</div></div>
+        <div class="tree-scene">
+          <svg viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="130" cy="228" rx="95" ry="12" fill="#0a2318"/>
+            <g class="tree-group" data-stage="0">
+              <ellipse cx="130" cy="214" rx="10" ry="7" fill="#8a5a2b"/>
+              <circle cx="130" cy="196" r="3" fill="#ffc857"/><circle cx="140" cy="204" r="1.6" fill="#ffc857"/><circle cx="120" cy="206" r="1.6" fill="#ffc857"/>
+            </g>
+            <g class="tree-group" data-stage="1">
+              <path d="M130 220 L130 188" stroke="#4fbf74" stroke-width="4" stroke-linecap="round" fill="none"/>
+              <path d="M130 198 Q114 194 112 182" stroke="#4fbf74" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <path d="M130 206 Q146 200 150 190" stroke="#4fbf74" stroke-width="4" fill="none" stroke-linecap="round"/>
+            </g>
+            <g class="tree-group" data-stage="2">
+              <rect x="124" y="168" width="12" height="55" rx="5" fill="#7a5230"/>
+              <circle cx="130" cy="150" r="34" fill="#3aa564"/><circle cx="130" cy="150" r="34" fill="url(#gradA)" opacity=".5"/>
+            </g>
+            <g class="tree-group" data-stage="3">
+              <rect x="121" y="150" width="16" height="75" rx="6" fill="#6f4a2a"/>
+              <circle cx="104" cy="132" r="30" fill="#369a5d"/><circle cx="156" cy="132" r="30" fill="#369a5d"/><circle cx="130" cy="112" r="36" fill="#42b56f"/>
+              <circle cx="82" cy="150" r="4" fill="#eaf4ec" opacity=".8"/>
+            </g>
+            <g class="tree-group" data-stage="4">
+              <rect x="117" y="140" width="24" height="88" rx="8" fill="#5f3f24"/>
+              <path d="M129 178 Q95 168 78 140" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <path d="M131 172 Q166 160 182 132" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <circle cx="78" cy="128" r="26" fill="#2f9e5c"/><circle cx="182" cy="120" r="28" fill="#2f9e5c"/>
+              <circle cx="129" cy="150" r="38" fill="#379e5c"/><circle cx="129" cy="96" r="46" fill="#4fc17a"/>
+              <circle cx="100" cy="80" r="4.5" fill="#ffc857"/><circle cx="160" cy="86" r="4.5" fill="#ffc857"/><circle cx="130" cy="60" r="4.5" fill="#ffc857"/>
+              <circle cx="90" cy="115" r="3.5" fill="#ffffff" opacity=".85"/><circle cx="168" cy="105" r="3.5" fill="#ffffff" opacity=".85"/>
+            </g>
+            <g class="tree-group" data-stage="5">
+              <rect x="30" y="185" width="12" height="42" rx="5" fill="#5f3f24"/><circle cx="36" cy="172" r="24" fill="#2f9e5c"/>
+              <rect x="212" y="178" width="13" height="49" rx="5" fill="#5f3f24"/><circle cx="219" cy="160" r="28" fill="#2f9e5c"/>
+              <rect x="117" y="130" width="26" height="98" rx="9" fill="#5f3f24"/>
+              <path d="M129 168 Q92 156 74 128" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <path d="M131 162 Q170 148 188 118" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <circle cx="74" cy="116" r="27" fill="#2f9e5c"/><circle cx="188" cy="106" r="29" fill="#2f9e5c"/>
+              <circle cx="129" cy="140" r="40" fill="#379e5c"/><circle cx="129" cy="82" r="50" fill="#57c983"/>
+              <circle class="firefly" cx="95" cy="70" r="3" fill="#ffe08a"/><circle class="firefly" cx="165" cy="60" r="3" fill="#ffe08a"/><circle class="firefly" cx="130" cy="40" r="3" fill="#ffe08a"/>
+              <circle cx="60" cy="150" r="3" fill="#ffc857"/><circle cx="200" cy="145" r="3" fill="#ffc857"/>
+            </g>
+            <defs><radialGradient id="gradA"><stop offset="0%" stop-color="#7fe89b"/><stop offset="100%" stop-color="#2f9e5c" stop-opacity="0"/></radialGradient></defs>
+          </svg>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="progress-note"><span id="progressText">0 จังหวะ</span><span>ไม่จำกัด — ยิ่งเยอะยิ่งเป็นป่าใหญ่</span></div>
+      </div>
+
+      <div class="card stats-card">
+        <div class="stat-box"><div class="v num" id="statTotal">0</div><div class="k">จังหวะ<br/>รอบนี้</div></div>
+        <div class="stat-box"><div class="v num" id="statBest">0</div><div class="k">คอมโบ<br/>สูงสุด</div></div>
+        <div class="stat-box"><div class="v num" id="statTime">0:00</div><div class="k">เวลา<br/>ที่เล่น</div></div>
+        <div class="stat-box"><div class="v num" id="statTrees">0</div><div class="k">ปลูกสำเร็จ<br/>วันนี้</div></div>
+      </div>
+
+      <div class="card lb-card">
+        <h2>🏆 กระดานคะแนน <span id="lbDurLabel" style="color:var(--gold);">รอบ 30 วิ</span> <span style="font-weight:400;">(เก็บในเครื่องนี้เท่านั้น)</span></h2>
+        <div id="lbList"><div class="lb-empty">ยังไม่มีใครส่งคะแนน — ปลูกป่าให้สำเร็จเพื่อขึ้นบอร์ด!</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div class="steps">
+      <span><b>1.</b> เลือก 30 หรือ 60 วินาที แล้วยืนห่างกล้อง ให้เห็นไหล่ถึงสะโพก</span>
+      <span><b>2.</b> โยกแขนสองข้างสลับขึ้น-ลงต่อเนื่อง ยิ่งทำเยอะ ยิ่งโต</span>
+      <span><b>3.</b> ไม่มีจำกัด ยิ่งทำเยอะ ยิ่งเป็นป่าใหญ่ ลุ้นทำลายสถิติของบูธ!</span>
+    </div>
+    <div class="toggle-row">เสียง <div class="toggle on" id="soundToggle"><i></i></div></div>
+  </div>
+</div>
+
+<script src="app.js"></script>
+</body>
+</html>
