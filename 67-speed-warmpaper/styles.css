@@ -1,0 +1,230 @@
+  :root{
+    --bg-0:#efe6d6;  --bg-1:#e7dcc8;  --panel:#fbf6ec;
+    --line: rgba(51,41,29,0.18);
+    --leaf:#4e7a35;  --leaf-deep:#38602a;
+    --gold:#b5822b;  --coral:#c0523f;
+    --mist:#33291d;  --mist-dim:rgba(51,41,29,0.70);  --mist-faint:rgba(51,41,29,0.48);
+    --radius:18px;
+  }
+  /* Derived tokens for the light theme. --gold and --coral are accent-fill
+     strengths: as TEXT on paper they land at 3.1:1 and 4.3:1, under the 4.5:1
+     this booth needs, so anything set in type uses the -ink pair instead.
+     --mist-faint is 2.8:1 on --panel and is therefore never used for text —
+     only for the toggle knob. Text that used to be --mist-faint is --mist-dim.
+     --wash / --wash-soft are the paper chips that float over the live camera;
+     they are deliberately near-opaque so HUD text keeps 4.5:1 even when the
+     video behind them is black. */
+  :root{
+    --gold-ink:#7a5512;
+    --coral-ink:#9c3823;
+    --ink-white:#fffdf7;
+    --wash: rgba(251,246,236,0.92);
+    --wash-soft: rgba(251,246,236,0.88);
+    --wash-line: rgba(51,41,29,0.26);
+    --fill-subtle: rgba(51,41,29,0.10);
+    --fill-track: rgba(51,41,29,0.14);
+    --shade: rgba(51,41,29,0.10);
+  }
+  *{ box-sizing:border-box; }
+  html,body{
+    margin:0; padding:0; height:100%; width:100%; overflow:hidden;
+    background: var(--bg-0);
+    color: var(--mist); font-family: 'Sarabun', sans-serif; -webkit-font-smoothing: antialiased; -webkit-tap-highlight-color: transparent;
+  }
+  h1,h2,h3,.display{ font-family:'Kanit', sans-serif; }
+  .num{ font-family:'JetBrains Mono', monospace; }
+
+  .kiosk{ height:100%; width:100%; display:flex; flex-direction:column; padding: clamp(10px,1.4vh,18px) clamp(12px,1.6vw,22px); gap: clamp(8px,1.2vh,14px); }
+
+  .topbar{ display:flex; align-items:center; justify-content:space-between; gap:14px; flex:0 0 auto; }
+  .brand{ display:flex; align-items:center; gap:10px; }
+  .brand .glyph{ font-size: clamp(20px,2.4vh,28px); }
+  .brand h1{ font-size: clamp(15px,2vh,21px); font-weight:800; margin:0; line-height:1.15; }
+  .brand h1 span{ color: var(--leaf-deep); }
+  .brand .tag{ font-size: clamp(10px,1.05vh,12px); color:var(--gold-ink); letter-spacing:.08em; text-transform:uppercase; font-weight:600; }
+  .engine-pill{ display:flex; align-items:center; gap:8px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:6px 14px; font-size: clamp(9.5px,1.05vh,11.5px); color:var(--mist-dim); }
+  .engine-pill b{ color:var(--leaf-deep); font-weight:600; }
+  .community{ display:flex; align-items:center; gap:9px; background:var(--panel); border:1px solid var(--line); border-radius:999px; padding: 6px 16px 6px 8px; }
+  .community .dot{ width: clamp(24px,3vh,32px); height: clamp(24px,3vh,32px); border-radius:50%; background:var(--leaf); display:flex; align-items:center; justify-content:center; font-size: clamp(12px,1.5vh,15px); flex-shrink:0; }
+  .community b{ font-size: clamp(10.5px,1.2vh,12.5px); display:block; }
+  .community small{ color:var(--mist-dim); font-size: clamp(9px,1.05vh,11px); }
+
+  .stage{ flex:1 1 auto; min-height:0; display:grid; grid-template-columns: 1.5fr 1fr; gap: clamp(10px,1.4vh,16px); }
+  @media (max-aspect-ratio: 4/5){ .stage{ grid-template-columns: 1fr; grid-template-rows: 1.3fr 1fr; } }
+
+  /* The paper card sits only 1.14:1 above the page ground, so the hairline and a
+     whisper of shadow — not the fill — are what separate them on a light theme. */
+  .card{ background: var(--panel); border:1px solid var(--line); border-radius: var(--radius); overflow:hidden; min-height:0; box-shadow: 0 1px 2px var(--shade); }
+
+  .cam-card{ position:relative; display:flex; flex-direction:column; min-height:0; }
+  .cam-viewport{ position:relative; flex:1; min-height:0; background:var(--bg-1); }
+  .cam-mirror{ position:absolute; inset:0; transform: scaleX(-1); }
+  video, canvas.overlay{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+  video{ opacity:.92; }
+
+  /* z-index 11: above the idle (7) and end-of-round (8) panels and the staff
+     controls (9). A camera fault must be the most visible thing on the screen —
+     buried under a 94%-opaque panel it would be invisible exactly when it matters. */
+  .cam-placeholder{ position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; gap: clamp(10px,1.6vh,16px); background:#f6ece3; text-align:center; padding: 20px; z-index:11; }
+  .cam-placeholder .glyph{ font-size: clamp(36px,6vh,56px); filter: drop-shadow(0 2px 6px rgba(51,41,29,.22)); }
+  .cam-placeholder h2{ color: var(--mist); }
+
+  .btn{ font-family:'Kanit',sans-serif; font-weight:600; font-size: clamp(14px,1.7vh,17px); padding: clamp(12px,1.7vh,16px) clamp(22px,2.8vw,32px); border-radius:14px; border:1px solid transparent; cursor:pointer; transition: transform .12s ease, filter .12s ease; }
+  .btn:active{ transform: scale(.97); }
+  .btn-primary{ background: var(--leaf); color: var(--ink-white); }
+  .btn-primary:hover{ filter:brightness(1.08); }
+  .btn-ghost{ background: var(--wash-soft); color:var(--mist); border-color: var(--wash-line); backdrop-filter: blur(6px); }
+  .btn-sm{ padding: 8px 16px; font-size:13px; }
+
+  .hud{ position:absolute; left: clamp(10px,1.4vw,18px); top: clamp(10px,1.4vh,18px); right: clamp(10px,1.4vw,18px); display:flex; justify-content:space-between; align-items:flex-start; pointer-events:none; z-index:3; }
+  .hud-count{ background: var(--wash); backdrop-filter: blur(6px); border:1px solid rgba(78,122,53,0.45); border-radius:14px; padding: clamp(6px,1vh,10px) clamp(12px,1.6vw,18px); display:flex; align-items:baseline; gap:8px; }
+  .hud-count .n{ font-size: clamp(24px,4vh,38px); font-weight:700; color:var(--leaf-deep); line-height:1; }
+  .hud-count .lbl{ font-size: clamp(9.5px,1.1vh,12px); color:var(--mist-dim); text-transform:uppercase; letter-spacing:.08em; }
+  .hud-right{ display:flex; flex-direction:column; gap:6px; align-items:flex-end; }
+  .hud-level{ background: var(--wash); backdrop-filter: blur(6px); border:1px solid rgba(181,130,43,0.5); border-radius:14px; padding: clamp(6px,1vh,10px) clamp(10px,1.4vw,16px); text-align:right; }
+  .hud-level .lv{ font-size: clamp(11px,1.4vh,14px); font-weight:600; color:var(--gold-ink); }
+  .hud-level .lvname{ font-size: clamp(9.5px,1.1vh,12px); color:var(--mist-dim); }
+  /* Was --mist-faint. On paper that is 2.8:1, so this line — like every other
+     faint one — steps up to --mist-dim. */
+  .hud-perf{ background: var(--wash); border:1px solid var(--wash-line); border-radius:10px; padding: 4px 10px; font-size: clamp(8.5px,1vh,10.5px); color:var(--mist-dim); }
+  .hud-perf b{ color:var(--mist); }
+
+  .timer-badge{ position:absolute; top: clamp(10px,1.4vh,18px); left:50%; transform:translateX(-50%); z-index:4; display:none; flex-direction:column; align-items:center; justify-content:center; background: var(--wash); backdrop-filter: blur(6px); border:2px solid rgba(78,122,53,0.55); border-radius:16px; padding: 6px 20px; line-height:1; transition: border-color .2s, background .2s; }
+  .timer-badge .timer-num{ font-family:'JetBrains Mono',monospace; font-size: clamp(26px,4.4vh,42px); font-weight:700; color:var(--leaf-deep); }
+  .timer-badge .timer-lbl{ font-size: clamp(8.5px,1vh,10.5px); color:var(--mist-dim); text-transform:uppercase; letter-spacing:.1em; margin-top:2px; }
+  /* "Get ready" beats before the clock starts — deliberately unlike the low-time
+     warning so the two are never confused at a glance. */
+  .timer-badge.countdown{ border-color: rgba(181,130,43,0.8); background: rgba(253,243,222,0.94); }
+  .timer-badge.countdown .timer-num{ color: var(--gold-ink); font-size: clamp(34px,6vh,58px); }
+  .timer-badge.countdown .timer-lbl{ color: var(--gold-ink); }
+  .timer-badge.low{ border-color: rgba(192,82,63,0.8); background: rgba(252,232,226,0.94); animation: timerPulse 1s infinite; }
+  .timer-badge.low .timer-num{ color: var(--coral-ink); }
+  @keyframes timerPulse{ 0%,100%{ transform:translateX(-50%) scale(1);} 50%{ transform:translateX(-50%) scale(1.08);} }
+
+  /* Wraps instead of nowrap: this is the only instruction telling a player how to
+     stand, and inside an overflow:hidden card a nowrap Thai sentence gets clipped
+     at both ends on portrait or narrow screens. */
+  .hint-line{ position:absolute; left:50%; bottom: clamp(58px,8vh,76px); transform:translateX(-50%); z-index:3; background: var(--wash); border:1px solid var(--wash-line); border-radius:16px; padding:7px 18px; font-size: clamp(11.5px,1.35vh,13.5px); color:var(--mist); max-width:min(90%,560px); white-space:normal; text-align:center; line-height:1.4; backdrop-filter: blur(6px); }
+  /* Right-inset so the staff buttons in the corner cannot cover the right meter. */
+  /* Paper-backed rather than translucent: a dark track alone would be read
+     against whatever the camera happens to be pointing at. */
+  .swing-meter{ position:absolute; left: clamp(10px,1.4vw,18px); right: clamp(112px,12vw,140px); bottom: clamp(12px,1.6vh,18px); height:8px; border-radius:99px; background: var(--wash-soft); overflow:hidden; z-index:3; display:flex; gap:4px; }
+  .swing-meter .half{ flex:1; border-radius:99px; overflow:hidden; background: var(--fill-track); position:relative; }
+  .swing-meter .half i{ position:absolute; left:0; top:0; bottom:0; width:50%; background: var(--leaf-deep); transition: width .06s linear; }
+
+  .success-overlay{ position:absolute; inset:0; z-index:8; overflow-y:auto; overscroll-behavior:contain; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:12px; background: rgba(247,241,229,0.96); opacity:0; pointer-events:none; transition: opacity .5s ease; text-align:center; padding:20px; }
+  .success-overlay.show{ opacity:1; pointer-events:auto; }
+  .success-overlay .g{ font-size: clamp(42px,7vh,64px); }
+  .success-overlay h2{ margin:0; font-size: clamp(19px,2.8vh,27px); color:var(--leaf-deep); }
+  .success-overlay p{ margin:0; color:var(--mist-dim); font-size: clamp(11.5px,1.5vh,14px); max-width:420px; }
+  /* Wraps and scrolls: on a short viewport a non-wrapping row would push the
+     save/skip buttons out of a centred, overflow:hidden panel — and those buttons
+     are the only way forward now that the panel waits for a choice. */
+  .success-overlay .submit-row{ display:flex; gap:8px; align-items:center; margin-top:6px; flex-wrap:wrap; justify-content:center; }
+  .success-overlay input{ font-family:'Sarabun',sans-serif; background:var(--panel); border:1px solid var(--wash-line); border-radius:10px; padding:9px 12px; color:var(--mist); font-size:13px; width:150px; text-align:center; }
+  .success-overlay input::placeholder{ color: var(--mist-dim); }
+
+  /* Resting screen between players. Still translucent so the live camera preview
+     shows through, but only just: at anything lighter the gold call-to-action
+     drops under 4.5:1 when the camera happens to be pointing at something dark. */
+  .idle-overlay{ position:absolute; inset:0; z-index:7; overflow-y:auto; overscroll-behavior:contain; display:flex; flex-direction:column; align-items:center; justify-content:center; gap: clamp(6px,1vh,11px); background: rgba(247,241,229,0.90); opacity:0; pointer-events:none; transition: opacity .35s ease; text-align:center; padding:20px; }
+  .idle-overlay.show{ opacity:1; pointer-events:auto; }
+  .idle-overlay .g{ font-size: clamp(34px,5.5vh,52px); filter: drop-shadow(0 3px 8px rgba(51,41,29,.20)); }
+  .idle-overlay h2{ margin:0; font-size: clamp(18px,2.7vh,26px); color:var(--leaf-deep); }
+  .idle-overlay p{ margin:0; color:var(--gold-ink); font-size: clamp(11.5px,1.5vh,14px); font-weight:600; }
+  .idle-overlay .idle-hint{ color:var(--mist-dim); font-size: clamp(10.5px,1.25vh,12.5px); max-width:380px; line-height:1.5; }
+
+  /* above .success-overlay (z-index 8) — that panel now waits indefinitely for a
+     player's choice, so staff must still be able to reach these controls */
+  /* These two buttons are the only way to recover a booth whose player walked off,
+     so they must work on a touchscreen: :hover does not exist there, and a 24px
+     target at 25% opacity over live video is neither hittable nor findable.
+     Raised from .55 to .7 for the light theme: a pale chip fades into a bright
+     camera frame far faster than a dark one did. */
+  .staff-controls{ position:absolute; right: clamp(8px,1.2vw,14px); bottom: clamp(8px,1.2vh,14px); z-index:9; display:flex; gap:8px; opacity:.7; transition:opacity .2s; }
+  .staff-controls:hover, .staff-controls:focus-within{ opacity:1; }
+  .staff-btn{ font-size:13px; min-height:44px; min-width:92px; padding:8px 14px; border-radius:10px; background:var(--wash); border:1px solid var(--wash-line); color:var(--mist); cursor:pointer; }
+  .staff-btn:focus-visible{ outline:2px solid var(--leaf-deep); outline-offset:2px; }
+
+  .side{ display:flex; flex-direction:column; gap: clamp(7px,1.1vh,12px); min-height:0; }
+  .tree-card{ flex:1.05; display:flex; flex-direction:column; padding: clamp(9px,1.3vh,14px); min-height:0; }
+  .tree-head{ display:flex; align-items:baseline; justify-content:space-between; margin-bottom:5px; flex:0 0 auto; }
+  .tree-head h2{ font-size: clamp(10.5px,1.25vh,13px); margin:0; font-weight:600; color:var(--mist-dim); }
+  .tree-stage-name{ font-size: clamp(14px,1.9vh,19px); font-weight:700; color:var(--leaf-deep); }
+  /* Flat --bg-1. Every green in the inline SVG is tuned to clear 3:1 against
+     exactly this value, so changing it means re-tuning the tree. */
+  .tree-scene{ position:relative; flex:1; min-height:0; background: var(--bg-1); border-radius:14px; overflow:hidden; border:1px solid rgba(51,41,29,0.14); }
+  .tree-scene svg{ position:absolute; bottom:-4px; left:0; width:100%; height:100%; }
+  .tree-group{ opacity:0; transform: translateY(6px) scale(.96); transform-origin:130px 220px; transition: opacity .5s ease, transform .5s cubic-bezier(.2,.9,.3,1.2); }
+  .tree-group.active{ opacity:1; transform: translateY(0) scale(1); }
+  .firefly{ animation: floaty 3.4s ease-in-out infinite; }
+  .firefly:nth-child(2){ animation-delay:.8s; } .firefly:nth-child(3){ animation-delay:1.6s; }
+  @keyframes floaty{ 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(-9px);} }
+
+  .progress-track{ margin: clamp(6px,1vh,10px) 2px 4px; flex:0 0 auto; height:8px; border-radius:99px; background:var(--fill-subtle); overflow:hidden; }
+  .progress-fill{ height:100%; background: var(--leaf); border-radius:99px; transition: width .4s ease; }
+  .progress-note{ font-size: clamp(9.5px,1.1vh,11.5px); color:var(--mist-dim); display:flex; justify-content:space-between; margin-top:4px; flex:0 0 auto; }
+  .level-dots{ display:flex; gap:5px; margin-top:7px; flex:0 0 auto; }
+  .level-dots .d{ flex:1; height: clamp(18px,2.4vh,25px); border-radius:8px; background:var(--bg-1); border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size: clamp(10px,1.3vh,14px); opacity:.5; transition: all .3s ease; }
+  .level-dots .d.done{ opacity:1; background: var(--leaf); border-color:transparent; }
+
+  .stats-card{ flex:0 0 auto; padding: clamp(7px,1.1vh,11px) clamp(9px,1.3vh,13px); display:grid; grid-template-columns: repeat(4,1fr); gap:7px; }
+  .stat-box{ background: var(--bg-1); border:1px solid var(--line); border-radius:10px; padding: clamp(5px,.9vh,8px) 5px; text-align:center; }
+  .stat-box .v{ font-size: clamp(13px,1.8vh,18px); font-weight:700; color:var(--mist); }
+  .stat-box .k{ font-size: clamp(7.5px,.9vh,9.5px); color:var(--mist-dim); margin-top:1px; line-height:1.2; }
+
+  .lb-card{ flex:0 0 auto; padding: clamp(8px,1.1vh,12px) clamp(10px,1.3vh,14px); }
+  .lb-card h2{ font-size: clamp(10.5px,1.2vh,12.5px); margin:0 0 6px; font-weight:600; color:var(--mist-dim); display:flex; justify-content:space-between; }
+  .lb-row{ display:flex; align-items:center; gap:8px; font-size: clamp(10.5px,1.2vh,12.5px); padding:3px 0; }
+  .lb-row .rk{ width:16px; color:var(--gold-ink); font-family:'JetBrains Mono',monospace; font-weight:700; flex-shrink:0; }
+  .lb-row .nm{ flex:1; color:var(--mist-dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lb-row .sc{ font-family:'JetBrains Mono',monospace; color:var(--leaf-deep); font-weight:600; }
+  .lb-empty{ font-size:11.5px; color:var(--mist-dim); }
+
+  .bottombar{ flex:0 0 auto; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+  /* --mist-faint on the paper ground is about 2.8:1 — below the 4.5:1 minimum. These
+     three lines are the only written instructions on the screen, read at arm's
+     length by kids in a bright hall, so they use the readable tone and a larger size. */
+  .bottombar .steps{ display:flex; gap:14px; font-size: clamp(11.5px,1.3vh,13.5px); color:var(--mist-dim); flex-wrap:wrap; }
+  .bottombar .steps b{ color:var(--mist-dim); font-weight:600; }
+  .toggle-row{ display:flex; align-items:center; gap:8px; font-size: clamp(9.5px,1.1vh,11.5px); color:var(--mist-dim); flex-shrink:0; }
+  /* A real <button> now (keyboard reachable, role=switch), so the default button
+     chrome has to be reset back to the pill. */
+  .toggle{ width:32px; height:18px; border-radius:99px; background:var(--fill-subtle); border:1px solid var(--line); position:relative; cursor:pointer; padding:0; appearance:none; -webkit-appearance:none; flex-shrink:0; }
+  .toggle:focus-visible{ outline:2px solid var(--leaf-deep); outline-offset:2px; }
+  /* The off-state knob is the switch's only state indicator when the pill is grey.
+     --mist-faint would put it at 2.26:1 against its own track here — under the 3:1
+     that a meaningful graphic needs — so it takes an explicit slightly stronger ink
+     and still reads as "muted". */
+  .toggle i{ position:absolute; top:2px; left:2px; width:12px; height:12px; border-radius:50%; background:rgba(51,41,29,0.60); transition: all .18s ease; }
+  .toggle.on{ background: rgba(78,122,53,.25); border-color: var(--leaf); }
+  .toggle.on i{ left:16px; background: var(--leaf-deep); }
+
+  #power-overlay{ position:fixed; inset:0; z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; background: var(--bg-0); text-align:center; padding:30px; }
+  #power-overlay .glyph{ font-size:52px; filter: drop-shadow(0 3px 10px rgba(51,41,29,.22)); }
+  #power-overlay h1{ font-size:clamp(21px,3.2vh,30px); margin:0; }
+  #power-overlay h1 span{ color:var(--leaf-deep); }
+  #power-overlay p{ color:var(--mist-dim); max-width:480px; font-size:13.5px; line-height:1.6; margin:0; }
+  /* Was --mist-faint; stepped up because this is the line that explains that no
+     video leaves the machine, and parents actually read it. */
+  #power-overlay .techline{ color:var(--mist-dim); max-width:480px; font-size:11.5px; line-height:1.6; font-family:'JetBrains Mono',monospace; }
+  #power-overlay .err{ color:var(--coral-ink); font-size:13px; min-height:18px; }
+
+  #toast-zone{ position:fixed; top:14px; left:50%; transform:translateX(-50%); z-index:50; display:flex; flex-direction:column; gap:8px; align-items:center; pointer-events:none; }
+  .toast{ font-family:'Kanit',sans-serif; background: rgba(251,246,236,0.96); border:1px solid rgba(78,122,53,.45); backdrop-filter: blur(10px); border-radius:14px; padding:10px 20px; display:flex; align-items:center; gap:10px; box-shadow: 0 10px 24px rgba(51,41,29,.18); animation: toastIn .45s cubic-bezier(.2,.9,.3,1.2), toastOut .5s ease 2.6s forwards; }
+  .toast .icon{ font-size:22px; } .toast .t1{ font-weight:700; font-size:13.5px; color: var(--leaf-deep); } .toast .t2{ font-size:11px; color: var(--mist-dim); }
+  @keyframes toastIn{ from{ opacity:0; transform:translateY(-14px) scale(.9);} to{opacity:1; transform:translateY(0) scale(1);} }
+  @keyframes toastOut{ to{ opacity:0; transform:translateY(-10px) scale(.95);} }
+  .leaf-particle{ position:fixed; top:-20px; font-size:16px; z-index:49; pointer-events:none; animation: fall linear forwards; }
+  @keyframes fall{ to{ transform: translateY(110vh) rotate(360deg); opacity:.2; } }
+
+  /* ---------------------------------------------------------------------------
+     app.js writes two inline colours straight onto elements, and inline styles
+     outrank stylesheet rules. Both name accent-fill tokens that fail as text on
+     paper, so they are re-pointed at the -ink pair here rather than by editing
+     app.js. The attribute-value match keeps each override scoped to exactly the
+     state app.js sets it in — when app.js clears lbScope's colour the attribute
+     no longer contains "--coral" and the rule stops applying.
+     --------------------------------------------------------------------------- */
+  #successDesc b[style*="--gold"]{ color: var(--gold-ink) !important; }
+  #lbScope[style*="--coral"]{ color: var(--coral-ink) !important; }
