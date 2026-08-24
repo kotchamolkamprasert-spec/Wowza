@@ -154,15 +154,7 @@
   /* Flat --bg-1. Every green in the inline SVG is tuned to clear 3:1 against
      exactly this value, so changing it means re-tuning the tree. */
   .tree-scene{ position:relative; flex:1; min-height:0; background: var(--bg-1); border-radius:14px; overflow:hidden; border:1px solid rgba(51,41,29,0.14); }
-  /* FAIL-SAFE ORDER. The SVG tree is what shows by default; the voxel island
-     hides it only once it has actually booted, by putting .has3d on the scene.
-     The reverse (hiding the SVG up front) leaves an EMPTY panel whenever the
-     module fails to load at all - opened over file://, a 404, a syntax error -
-     because in that case the module's own try/catch never gets to run. */
-  #tree3d{ position:absolute; inset:0; width:100%; height:100%; display:none; }
-  .tree-scene.has3d #tree3d{ display:block; }
   .tree-scene svg{ position:absolute; bottom:-4px; left:0; width:100%; height:100%; }
-  .tree-scene.has3d .tree-svg-legacy{ display:none; }
   .tree-group{ opacity:0; transform: translateY(6px) scale(.96); transform-origin:130px 220px; transition: opacity .5s ease, transform .5s cubic-bezier(.2,.9,.3,1.2); }
   .tree-group.active{ opacity:1; transform: translateY(0) scale(1); }
   .firefly{ animation: floaty 3.4s ease-in-out infinite; }

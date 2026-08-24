@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>67 Speed | ปลูกป่าไปด้วยกัน — บูธวันวิทยาศาสตร์</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🌲</text></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600;700;800&family=Sarabun:wght@300;400;500;600&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<div id="toast-zone" aria-live="polite" aria-atomic="false"></div>
+
+<div id="power-overlay">
+  <div class="glyph">🌱</div>
+  <h1>67 Speed — <span>ปลูกป่าไปด้วยกัน</span></h1>
+  <p>บูธกล้องตั้งโต๊ะสำหรับงานวันวิทยาศาสตร์ — ยืนให้เห็นตั้งแต่หัวไหล่ถึงสะโพก ทันทีที่กล้องจับตัวได้จะเริ่มจับเวลา <b style="color:var(--leaf-deep)">60 วินาที</b> โยกแขนสองข้างขึ้น-ลงสลับกันตามท่าไวรัล 67 ให้เร็วที่สุด — <b style="color:var(--gold-ink)">ยิ่งทำเยอะ ยิ่งโต ไม่มีขีดจำกัด</b> จนกลายเป็นผืนป่า วัดกันตรงจำนวนจังหวะ ลุ้นทำลายสถิติสูงสุดของบูธนี้!</p>
+  <div class="techline">Powered by MediaPipe Pose Landmarker (33 keypoints, on-device WASM) — ประมวลผลในเบราว์เซอร์ทั้งหมด ไม่มีการอัปโหลดวิดีโอขึ้นเซิร์ฟเวอร์</div>
+  <button class="btn btn-primary" id="powerBtn">▶ เปิดกล้อง เริ่มบูธ</button>
+  <div class="err" id="powerErr"></div>
+</div>
+
+<div class="kiosk">
+  <div class="topbar">
+    <div class="brand">
+      <span class="glyph">🌲</span>
+      <div>
+        <h1>67 Speed — <span>ปลูกป่าไปด้วยกัน</span></h1>
+        <div class="tag">วันวิทยาศาสตร์ · เพื่อความยั่งยืน</div>
+      </div>
+    </div>
+    <div class="engine-pill">⚙️ <b>Pose Landmarker</b> · on-device · <span id="fpsPill">-- ms/frame</span></div>
+    <div class="community">
+      <div class="dot">🌍</div>
+      <div><b>ป่าแห่งวันนี้ (รวมทุกคน)</b><small id="communityTotal">0 จังหวะ · ปลูกสำเร็จ 0 ต้น</small></div>
+    </div>
+  </div>
+
+  <div class="stage">
+    <div class="card cam-card">
+      <div class="cam-viewport" id="camViewport">
+        <div class="cam-mirror">
+          <video id="video" playsinline muted></video>
+          <canvas class="overlay" id="overlay"></canvas>
+        </div>
+
+        <div class="hud" id="hud" style="display:none;">
+          <div class="hud-count"><span class="n num" id="hudCount">0</span><span class="lbl">จังหวะรวม</span></div>
+          <div class="hud-right">
+            <div class="hud-level"><div class="lv">🏆 สถิติสูงสุด</div><div class="lvname" id="hudRecord">ยังไม่มี</div></div>
+            <div class="hud-perf"><b id="latencyVal">--</b> ms/frame · <span id="fpsVal">--</span> fps</div>
+          </div>
+        </div>
+
+        <div class="timer-badge" id="timerBadge"><div class="timer-num" id="timerNum">60</div><div class="timer-lbl" id="timerLbl">วินาที</div></div>
+
+        <div class="hint-line" id="hintLine" style="display:none;">ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา 60 วิทันทีที่กล้องจับตัวได้</div>
+        <div class="swing-meter" id="swingMeter" style="display:none;">
+          <div class="half"><i id="swingFillL" style="width:50%"></i></div>
+          <div class="half"><i id="swingFillR" style="width:50%"></i></div>
+        </div>
+
+        <div class="success-overlay" id="successOverlay">
+          <div class="g" id="successEmoji">🏆🌲</div>
+          <h2 id="successTitle">ปลูกป่าสำเร็จแล้ว!</h2>
+          <p id="successDesc">ทำได้ <b class="num" id="successCount">0</b> จังหวะในรอบนี้ — ส่งคะแนนขึ้นกระดานของบูธนี้ได้ (ไม่ส่งข้อมูลใดออกนอกเครื่อง) หรือข้ามได้เลย</p>
+          <div class="submit-row">
+            <input id="lbName" type="text" placeholder="ชื่อเล่น (ไม่บังคับ)" aria-label="ชื่อเล่นสำหรับกระดานคะแนน" maxlength="16" />
+            <button class="btn btn-primary btn-sm" id="lbSubmitBtn">บันทึกคะแนน</button>
+            <button class="btn btn-ghost btn-sm" id="lbSkipBtn">ข้าม</button>
+          </div>
+        </div>
+
+        <div class="idle-overlay" id="idleOverlay">
+          <div class="g">🌳</div>
+          <h2 id="idleTitle">พร้อมปลูกป่าหรือยัง?</h2>
+          <p id="idleNote">ยังไม่มีสถิติของบูธ — มาเป็นคนแรกกันเลย!</p>
+          <button class="btn btn-primary" id="playBtn">▶ เริ่มเล่น</button>
+          <div class="idle-hint">ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วกดปุ่มเพื่อเริ่มจับเวลา 60 วินาที</div>
+        </div>
+
+        <div class="cam-placeholder" id="camPlaceholder" style="display:none;">
+          <div class="glyph">📷</div>
+          <h2 id="camMsg">กำลังเตรียมกล้อง…</h2>
+        </div>
+
+        <div class="staff-controls">
+          <button class="staff-btn" id="restartCamBtn">รีสตาร์ทกล้อง</button>
+          <button class="staff-btn" id="resetRoundBtn">เริ่มรอบใหม่</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="side">
+      <div class="card tree-card">
+        <div class="tree-head"><h2>ต้นไม้ของคุณ</h2><div class="tree-stage-name num" id="liveCountBig">0 จังหวะ</div></div>
+        <div class="tree-scene">
+          <svg viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
+            <!-- Warm Paper palette. The scene ground is --bg-1 (#e7dcc8); every green
+                 and gold below is picked to clear 3:1 against it, so the tree keeps its
+                 silhouette on paper. The old dark-theme greens, golds and white
+                 accents all sat at 1.1–2.5:1 here and would have washed out. -->
+            <!-- soft warm ground shadow — the old near-black ellipse read as a hole
+                 punched in the paper -->
+            <ellipse cx="130" cy="228" rx="95" ry="12" fill="#c9b89b"/>
+            <g class="tree-group" data-stage="0">
+              <ellipse cx="130" cy="214" rx="10" ry="7" fill="#8a5a2b"/>
+              <circle cx="130" cy="196" r="3" fill="#a3711f"/><circle cx="140" cy="204" r="1.6" fill="#a3711f"/><circle cx="120" cy="206" r="1.6" fill="#a3711f"/>
+            </g>
+            <g class="tree-group" data-stage="1">
+              <path d="M130 220 L130 188" stroke="#33794a" stroke-width="4" stroke-linecap="round" fill="none"/>
+              <path d="M130 198 Q114 194 112 182" stroke="#33794a" stroke-width="4" fill="none" stroke-linecap="round"/>
+              <path d="M130 206 Q146 200 150 190" stroke="#33794a" stroke-width="4" fill="none" stroke-linecap="round"/>
+            </g>
+            <g class="tree-group" data-stage="2">
+              <rect x="124" y="168" width="12" height="55" rx="5" fill="#7a5230"/>
+              <!-- the second circle was a radial fill; now a flat highlight tint at .35
+                   so the blended result still clears 3:1 against the paper ground -->
+              <circle cx="130" cy="150" r="34" fill="#33794a"/><circle cx="130" cy="150" r="34" fill="#57a06c" opacity=".35"/>
+            </g>
+            <g class="tree-group" data-stage="3">
+              <rect x="121" y="150" width="16" height="75" rx="6" fill="#6f4a2a"/>
+              <circle cx="104" cy="132" r="30" fill="#33794a"/><circle cx="156" cy="132" r="30" fill="#33794a"/><circle cx="130" cy="112" r="36" fill="#3d8b52"/>
+              <!-- this blossom sits on the paper, not on foliage, so its near-white
+                   fill (1.05:1 here) is re-tinted to the warm coral accent -->
+              <circle cx="82" cy="150" r="4" fill="#c0523f" opacity=".9"/>
+            </g>
+            <g class="tree-group" data-stage="4">
+              <rect x="117" y="140" width="24" height="88" rx="8" fill="#5f3f24"/>
+              <path d="M129 178 Q95 168 78 140" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <path d="M131 172 Q166 160 182 132" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <circle cx="78" cy="128" r="26" fill="#2a6a3e"/><circle cx="182" cy="120" r="28" fill="#2a6a3e"/>
+              <circle cx="129" cy="150" r="38" fill="#33794a"/><circle cx="129" cy="96" r="46" fill="#3d8b52"/>
+              <circle cx="100" cy="80" r="4.5" fill="#a3711f"/><circle cx="160" cy="86" r="4.5" fill="#a3711f"/><circle cx="130" cy="60" r="4.5" fill="#a3711f"/>
+              <!-- these two land inside the canopy circles, so they stay bright; warmed
+                   off pure white so they read as blossoms rather than as holes -->
+              <circle cx="90" cy="115" r="3.5" fill="#fff4e2" opacity=".95"/><circle cx="168" cy="105" r="3.5" fill="#fff4e2" opacity=".95"/>
+            </g>
+            <g class="tree-group" data-stage="5">
+              <rect x="30" y="185" width="12" height="42" rx="5" fill="#5f3f24"/><circle cx="36" cy="172" r="24" fill="#2a6a3e"/>
+              <rect x="212" y="178" width="13" height="49" rx="5" fill="#5f3f24"/><circle cx="219" cy="160" r="28" fill="#2a6a3e"/>
+              <rect x="117" y="130" width="26" height="98" rx="9" fill="#5f3f24"/>
+              <path d="M129 168 Q92 156 74 128" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <path d="M131 162 Q170 148 188 118" stroke="#5f3f24" stroke-width="7" fill="none" stroke-linecap="round"/>
+              <circle cx="74" cy="116" r="27" fill="#2a6a3e"/><circle cx="188" cy="106" r="29" fill="#2a6a3e"/>
+              <circle cx="129" cy="140" r="40" fill="#33794a"/><circle cx="129" cy="82" r="50" fill="#3d8b52"/>
+              <!-- fireflies rest on the canopy but float 9px up, and the top one clears
+                   the canopy edge at the peak of that float. A bright core alone would
+                   blink out against the paper there, so each gets a warm-gold rim that
+                   holds 3.1:1 on the paper while the core still glows on the green. -->
+              <circle class="firefly" cx="95" cy="70" r="3" fill="#ffd970" stroke="#a3711f" stroke-width="1"/><circle class="firefly" cx="165" cy="60" r="3" fill="#ffd970" stroke="#a3711f" stroke-width="1"/><circle class="firefly" cx="130" cy="40" r="3" fill="#ffd970" stroke="#a3711f" stroke-width="1"/>
+              <circle cx="60" cy="150" r="3" fill="#a3711f"/><circle cx="200" cy="145" r="3" fill="#a3711f"/>
+            </g>
+          </svg>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+        <div class="progress-note"><span id="progressText">0 จังหวะ</span><span>ไม่จำกัด — ยิ่งเยอะยิ่งเป็นป่าใหญ่</span></div>
+      </div>
+
+      <div class="card stats-card">
+        <div class="stat-box"><div class="v num" id="statTotal">0</div><div class="k">จังหวะ<br/>รอบนี้</div></div>
+        <div class="stat-box"><div class="v num" id="statBest">0</div><div class="k">คอมโบ<br/>สูงสุด</div></div>
+        <div class="stat-box"><div class="v num" id="statTime">0:00</div><div class="k">เวลา<br/>ที่เล่น</div></div>
+        <div class="stat-box"><div class="v num" id="statTrees">0</div><div class="k">ปลูกสำเร็จ<br/>วันนี้</div></div>
+      </div>
+
+      <div class="card lb-card">
+        <h2>🏆 กระดานคะแนน <span style="font-weight:400;" id="lbScope">(เก็บในเครื่องนี้เท่านั้น)</span></h2>
+        <div id="lbList"><div class="lb-empty">ยังไม่มีใครส่งคะแนน — ปลูกป่าให้สำเร็จเพื่อขึ้นบอร์ด!</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottombar">
+    <div class="steps">
+      <span><b>1.</b> ยืนห่างกล้อง ให้เห็นไหล่ถึงสะโพก — จับเวลา 60 วิทันที</span>
+      <span><b>2.</b> โยกแขนสองข้างสลับขึ้น-ลงต่อเนื่อง ยิ่งทำเยอะ ยิ่งโต</span>
+      <span><b>3.</b> ไม่มีจำกัด ยิ่งทำเยอะ ยิ่งเป็นป่าใหญ่ ลุ้นทำลายสถิติของบูธ!</span>
+    </div>
+    <div class="toggle-row">เสียง <button class="toggle on" id="soundToggle" role="switch" aria-checked="true" aria-label="เปิด/ปิดเสียง"><i></i></button></div>
+  </div>
+</div>
+
+<!-- Written by booth-server.ps1; absent when the page is opened directly, in which
+     case the game runs stand-alone on this machine's own scores. -->
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

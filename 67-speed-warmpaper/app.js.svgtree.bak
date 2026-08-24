@@ -282,10 +282,6 @@ function updateTree(){
   // growth is uncapped — once the forest stage is reached, keep sparkling every 20 reps to show it's still counting
   if(count >= TREE_MAX && count % 20 === 0) leafBurst(6);
   const pct = Math.min(100, (count / TREE_MAX) * 100);
-  // Drive the voxel island. Guarded: if the 3D module never loaded the game
-  // carries on exactly as before. __treePending covers reps landing before it boots.
-  if (window.Tree3D) window.Tree3D.setProgress(pct / 100);
-  else window.__treePending = pct / 100;
   progressFill.style.width = pct + '%';
   progressText.textContent = `${count} จังหวะ`;
   liveCountBig.textContent = `${count} จังหวะ`;

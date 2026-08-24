@@ -97,7 +97,11 @@
       <div class="card tree-card">
         <div class="tree-head"><h2>ต้นไม้ของคุณ</h2><div class="tree-stage-name num" id="liveCountBig">0 จังหวะ</div></div>
         <div class="tree-scene">
-          <svg viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
+          <!-- The voxel island replaces the flat SVG tree. The <svg> below is kept
+               in the DOM and hidden: app.js still calls setTreeStage(), which walks
+               .tree-group, and removing it would leave that walking nothing. -->
+          <canvas id="tree3d"></canvas>
+          <svg class="tree-svg-legacy" viewBox="0 0 260 260" xmlns="http://www.w3.org/2000/svg">
             <!-- Warm Paper palette. The scene ground is --bg-1 (#e7dcc8); every green
                  and gold below is picked to clear 3:1 against it, so the tree keeps its
                  silhouette on paper. The old dark-theme greens, golds and white
@@ -185,7 +189,25 @@
 
 <!-- Written by booth-server.ps1; absent when the page is opened directly, in which
      case the game runs stand-alone on this machine's own scores. -->
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js" } }
+</script>
 <script src="config.js"></script>
 <script src="app.js"></script>
+<script type="module">
+  /* Booted after app.js so the hook it calls is already wired. A failure here
+     must not take the booth down: the game is the pose detection, not the tree. */
+  import { initTree, setTreeProgress, treeInfo } from './tree3d.js?v=4';   // bump to bust the module cache
+  try {
+    initTree(document.getElementById('tree3d'));
+    window.Tree3D = { setProgress: setTreeProgress, info: treeInfo };
+    // Only now is it safe to hide the SVG - see the fail-safe note in styles.css.
+    document.querySelector('.tree-scene').classList.add('has3d');
+    if (window.__treePending != null) setTreeProgress(window.__treePending, true);
+  } catch (e) {
+    console.warn('voxel tree unavailable, keeping the SVG tree:', e);
+    document.getElementById('tree3d')?.remove();
+  }
+</script>
 </body>
 </html>
