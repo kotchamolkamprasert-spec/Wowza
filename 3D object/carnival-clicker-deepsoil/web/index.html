@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Carnival Clicker — ปลูกป่าไปด้วยกัน</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><text y='26' font-size='26'>🌲</text></svg>">
+
+<!-- Fonts are vendored, not pulled from Google: a carnival hall is exactly
+     where the wifi dies, and a booth that falls back to Times New Roman on the
+     day looks broken.  vendor/fonts/files/ is 518 KB for all three families
+     including the Thai subsets. -->
+<link rel="stylesheet" href="vendor/fonts/fonts.css">
+<link rel="stylesheet" href="style.css">
+
+<script type="importmap">
+{ "imports": { "three": "./vendor/three/three.module.js" } }
+</script>
+</head>
+<body>
+
+<div class="kiosk">
+
+  <!-- ======================================================== TOPBAR -->
+  <div class="topbar">
+    <div class="brand">
+      <span class="glyph">🌲</span>
+      <div>
+        <h1>CARNIVAL <span>CLICKER</span></h1>
+        <div class="tag">ปลูกป่าไปด้วยกัน · วันวิทยาศาสตร์</div>
+      </div>
+    </div>
+
+    <div class="engine-pill">🎮 <b>ESP32</b> · Classic Bluetooth SPP · <span id="linkHint">กำลังตรวจหาคอนโทรลเลอร์…</span></div>
+
+    <!-- game.js REPLACES this element's className every 5s with
+         "link-pill none|one|two" — do not add classes here. -->
+    <div id="link" class="link-pill none"><i></i><span>controllers</span></div>
+  </div>
+
+  <!-- ========================================================= STAGE -->
+  <div class="stage-grid">
+
+    <div class="panel view-panel">
+      <div class="view-viewport">
+        <canvas id="stage"></canvas>
+        <div id="vignette"></div>
+
+        <!-- ----------------------------------------------------- HOME -->
+        <section id="home" class="screen">
+          <div class="glow"></div>
+          <h1 class="logo">CARNIVAL<span>CLICKER</span></h1>
+          <p class="tag">กดให้เร็วที่สุด ปลูกป่าให้เสร็จ แล้วขึ้นกระดานคะแนน</p>
+          <button class="big" id="startBtn">▶ เริ่มเล่น · START</button>
+          <p class="hint">กด <kbd>Space</kbd> เพื่อเริ่ม</p>
+        </section>
+
+        <!-- ---------------------------------------------------- SETUP -->
+        <section id="setup" class="screen">
+          <h2>ใครเล่นบ้าง? · WHO IS PLAYING?</h2>
+
+          <div class="modes">
+            <button class="mode sel" data-mode="solo">
+              <span class="mi">🎯</span><b>SOLO</b>
+              <em>คนเดียวแข่งกับเวลา</em>
+            </button>
+            <button class="mode" data-mode="versus">
+              <span class="mi">⚔️</span><b>HEAD TO HEAD</b>
+              <em>สองคน หาผู้ชนะ</em>
+            </button>
+            <button class="mode" data-mode="coop">
+              <span class="mi">🤝</span><b>CO-OP</b>
+              <em>ช่วยกันปลูกต้นเดียว</em>
+            </button>
+          </div>
+
+          <div class="names">
+            <label class="p1"><span id="p1label">PLAYER 1</span>
+              <input id="n1" maxlength="12" placeholder="ชื่อเล่น" autocomplete="off"></label>
+            <label class="p2" id="p2wrap"><span>PLAYER 2</span>
+              <input id="n2" maxlength="12" placeholder="ชื่อเล่น" autocomplete="off"></label>
+          </div>
+
+          <div class="row">
+            <button class="ghost" data-goto="home">ย้อนกลับ · BACK</button>
+            <button class="big" id="goBtn">GO</button>
+          </div>
+          <p class="build">build 5 · deep soil · 200 clicks · spins past the finish</p>
+        </section>
+
+        <!-- ------------------------------------------------ COUNTDOWN -->
+        <section id="countdown" class="screen">
+          <div id="countNum">3</div>
+        </section>
+
+        <!-- ----------------------------------------------------- PLAY -->
+        <!-- Intentionally empty: "playing" is the state with no overlay.
+             The timer badge and hint below key off #play.active. -->
+        <section id="play" class="screen"></section>
+
+        <!-- --------------------------------------------------- RESULT -->
+        <section id="result" class="screen">
+          <h2 id="resultTitle">TIME!</h2>
+          <div id="resultBody"></div>
+          <div class="row">
+            <button class="big" id="againBtn">เล่นอีกครั้ง · PLAY AGAIN</button>
+            <button class="ghost" data-goto="home">หน้าแรก · HOME</button>
+          </div>
+          <p class="hint">กด <kbd>Space</kbd> เพื่อเล่นอีกครั้ง</p>
+        </section>
+
+        <!-- ---------------------------------------------- LEADERBOARD -->
+        <section id="leaderboard" class="screen">
+          <h2>🏆 กระดานคะแนน · LEADERBOARD</h2>
+          <div class="boards">
+            <div class="board">
+              <h3>SOLO &amp; VERSUS</h3>
+              <ol id="fullBoard" class="board-list"></ol>
+            </div>
+            <div class="board">
+              <h3>CO-OP TEAMS</h3>
+              <ol id="fullTeams" class="board-list"></ol>
+            </div>
+          </div>
+          <button class="ghost" data-goto="home">หน้าแรก · HOME</button>
+        </section>
+
+        <!-- Play-only chrome. Must stay AFTER #play — the CSS reveals these
+             with `#play.active ~ …`, which only reaches later siblings. -->
+        <div class="timer-badge timer" id="timerBadge">
+          <div class="timer-num num" id="clock">60</div>
+          <div class="timer-lbl">วินาที · seconds</div>
+        </div>
+        <div class="hint-line">กดปุ่มบนคอนโทรลเลอร์ให้เร็วที่สุด — ยิ่งกดเยอะ ป่ายิ่งโต</div>
+      </div>
+    </div>
+
+    <!-- ========================================================== SIDE -->
+    <div class="side">
+
+      <div class="panel tracks-panel">
+        <div class="panel-head">
+          <h2>ความคืบหน้า · PROGRESS</h2>
+          <span class="sub">200 คลิก = ปลูกเสร็จ</span>
+        </div>
+        <div class="tracks" id="tracks"></div>
+      </div>
+
+      <div class="panel lb-panel">
+        <div class="panel-head">
+          <h2>🏆 อันดับวันนี้ · SOLO &amp; VERSUS</h2>
+        </div>
+        <ol id="homeBoard" class="board-list"><li class="empty">ยังไม่มีคะแนน — มาเป็นคนแรก!</li></ol>
+      </div>
+
+      <div class="panel lb-panel">
+        <div class="panel-head">
+          <h2>🤝 ทีมเก่งวันนี้ · CO-OP</h2>
+        </div>
+        <ol id="homeTeams" class="board-list"><li class="empty">ยังไม่มีทีมไหนจบรอบ</li></ol>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script type="module" src="game.js"></script>
+</body>
+</html>

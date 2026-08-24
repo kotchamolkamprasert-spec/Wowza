@@ -39,13 +39,42 @@ let poseLandmarker = null;
 let running = false;
 let rafId = null;
 let count = 0, bestCombo = 0, comboStreak = 0, currentStage = 0;
-let startTime = null;
 let soundOn = true;
 let audioCtx = null;
 let lastPersonSeenTime = performance.now();
 let latencyEMA = null;
 let treesPlantedToday = Number(localStorage.getItem('t67p_treesToday') || 0);
 let communityTotal = Number(localStorage.getItem('t67p_communityTotal') || 0);
+
+// config.js — written by booth-server.ps1 — sets window.SCORE_SERVER. With no
+// server that file is simply absent, and everything falls back to localStorage,
+// so a booth still works standalone and survives the wifi dropping mid-fair.
+const SCORE_SERVER = (window.SCORE_SERVER || '').replace(/\/+$/,'');
+let remote = null;       // last state fetched from the host, or null when offline
+let netFailed = false;
+
+/* ---- booth resilience ---- */
+const ABANDON_MS    = 9000;  // no one visible this long mid-round -> hand back to idle
+const COMBO_BREAK_MS = 1600; // gap that ends an unbroken run of reps
+const CAM_RETRY_MS  = 2500;  // wait between attempts to bring a dead camera back
+const COUNTDOWN_SECS = 3;    // "get ready" beats before the clock starts
+const CAM_STALL_MS  = 4000;  // frames stopped advancing this long -> treat as dead
+let countdownInterval = null;
+let lastVideoTime = -1;          // last distinct video.currentTime seen
+let lastFrameAdvanceAt = performance.now();
+let pausedMs = 0, pauseStartedAt = null;   // clock stopped while the camera is out
+let pulling = false, flushing = false;     // in-flight guards for the score sync
+let pendingCommunityDelta = 0;             // reps not yet confirmed by the host
+let loopErrors = 0;          // consecutive failed frames
+let camRecovering = false;
+let lastCamTryAt = 0;
+let roundStartAt = null;     // when the current round actually began
+
+// localStorage throws in private mode and when the quota is full. A booth must
+// never lose a round over that, so every write goes through here.
+function store(key, value){
+  try{ localStorage.setItem(key, String(value)); }catch(e){ /* keep playing */ }
+}
 
 // timed challenge session (SESSION_DURATION seconds)
 // IDLE is the booth's resting screen: camera preview and leaderboard on show, but
@@ -67,7 +96,7 @@ const powerOverlay=$('power-overlay'), powerBtn=$('powerBtn'), powerErr=$('power
 const hud=$('hud'), hudCount=$('hudCount'), hudRecord=$('hudRecord');
 const latencyVal=$('latencyVal'), fpsVal=$('fpsVal'), fpsPill=$('fpsPill');
 const hintLine=$('hintLine'), swingMeter=$('swingMeter'), swingFillL=$('swingFillL'), swingFillR=$('swingFillR');
-const timerBadge=$('timerBadge'), timerNum=$('timerNum');
+const timerBadge=$('timerBadge'), timerNum=$('timerNum'), timerLbl=$('timerLbl');
 const successOverlay=$('successOverlay'), successEmoji=$('successEmoji'), successTitle=$('successTitle'), successDesc=$('successDesc'), successCount=$('successCount'), lbName=$('lbName'), lbSubmitBtn=$('lbSubmitBtn'), lbSkipBtn=$('lbSkipBtn');
 const liveCountBig=$('liveCountBig'), progressFill=$('progressFill'), progressText=$('progressText');
 const statTotal=$('statTotal'), statBest=$('statBest'), statTime=$('statTime'), statTrees=$('statTrees');
@@ -75,6 +104,8 @@ const communityTotalEl=$('communityTotal'), soundToggle=$('soundToggle'), toastZ
 const treeGroups=document.querySelectorAll('.tree-group');
 const restartCamBtn=$('restartCamBtn'), resetRoundBtn=$('resetRoundBtn'), lbList=$('lbList');
 const idleOverlay=$('idleOverlay'), idleTitle=$('idleTitle'), idleNote=$('idleNote'), playBtn=$('playBtn');
+const lbScope=$('lbScope'), camPlaceholder=$('camPlaceholder'), camMsg=$('camMsg');
+let lastRoundReps = 0, lastRoundPlanted = false;
 
 statTrees.textContent = treesPlantedToday;
 communityTotalEl.textContent = `${communityTotal} จังหวะ · ปลูกสำเร็จ ${treesPlantedToday} ต้น`;
@@ -84,18 +115,123 @@ function setTreeStage(stage){
   treeGroups.forEach(g=>g.classList.toggle('active', Number(g.dataset.stage)===stage));
 }
 
-/* ================= leaderboard (local only) ================= */
-function getLeaderboard(){ try{ return JSON.parse(localStorage.getItem('t67p_leaderboard')||'[]'); }catch(e){ return []; } }
+/* ================= shared board (booth-server.ps1) =================
+   SCORE_SERVER / remote / netFailed are declared up with the rest of the state,
+   because renderLeaderboard() runs during start-up and reads them. */
+
+// Every request is bounded. A host that accepts the connection but never answers
+// (wedged process, sleeping laptop, captive portal) would otherwise leave a fetch
+// pending forever, and the 5s poll would pile those up all day until the tab dies.
+function netFetch(url, opts){
+  const ctl = new AbortController();
+  const t = setTimeout(()=>ctl.abort(), 4000);
+  return fetch(url, Object.assign({ signal: ctl.signal }, opts || {}))
+    .finally(()=>clearTimeout(t));
+}
+
+async function pullState(){
+  if(!SCORE_SERVER || pulling) return;    // never overlap with a poll in flight
+  pulling = true;
+  try{
+    await flushPending();
+    const r = await netFetch(SCORE_SERVER + '/api/state', { cache:'no-store' });
+    if(!r.ok) throw new Error(r.status);
+    remote = await r.json();
+    pendingCommunityDelta = 0;            // the host's number now includes ours
+    netFailed = false;
+  }catch(e){ netFailed = true; }
+  finally{ pulling = false; }
+  renderLeaderboard(); updateCommunityLine();
+}
+
+// One request per round, at the end — never per rep.
+async function postRound(payload){
+  try{
+    const r = await netFetch(SCORE_SERVER + '/api/round', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(payload)
+    });
+    if(!r.ok) throw new Error(r.status);
+    remote = await r.json();
+    netFailed = false;
+    return true;
+  }catch(e){ netFailed = true; return false; }
+}
+
+// Rounds played while the host is unreachable are held here and sent on the next
+// successful poll, so a wifi blip costs the shared board nothing.
+function pendingQueue(){ try{ return JSON.parse(localStorage.getItem('t67p_pending')||'[]'); }catch(e){ return []; } }
+// Each item is removed from the stored queue BEFORE it is posted. Rewriting the
+// whole array at the end instead would let two overlapping runs read the same
+// queue and submit every held round twice.
+async function flushPending(){
+  if(flushing) return;
+  flushing = true;
+  try{
+    while(true){
+      const q = pendingQueue();
+      if(!q.length) break;
+      const item = q[0];
+      store('t67p_pending', JSON.stringify(q.slice(1)));
+      if(!(await postRound(item))){
+        const back = pendingQueue();      // put it back at the front and stop
+        back.unshift(item);
+        store('t67p_pending', JSON.stringify(back.slice(0,50)));
+        break;
+      }
+    }
+  }finally{ flushing = false; }
+}
+
+async function pushRound(name, reps, planted){
+  if(!SCORE_SERVER) return false;
+  const payload = { name:name||'', count:reps, planted:planted?1:0 };
+  const ok = await postRound(payload);
+  if(!ok){
+    const q = pendingQueue(); q.push(payload);
+    store('t67p_pending', JSON.stringify(q.slice(-50)));
+  }
+  renderLeaderboard(); updateCommunityLine();
+  return ok;
+}
+
+function updateCommunityLine(){
+  // While a round is live the local count is added on top, so the number climbs
+  // as you play instead of jumping only when the round is sent.
+  // pendingCommunityDelta holds reps the host has not confirmed yet, so the
+  // headline number never dips backwards between the round ending and the POST
+  // landing — and it keeps climbing even while offline.
+  const base = (remote ? remote.communityTotal : communityTotal) + pendingCommunityDelta;
+  const trees = remote ? remote.treesPlanted : treesPlantedToday;
+  const live = (sessionState === 'RUNNING' || sessionState === 'COUNTDOWN') ? count : 0;
+  communityTotalEl.textContent = `${base + live} จังหวะ · ปลูกสำเร็จ ${trees} ต้น`;
+  statTrees.textContent = trees;
+}
+
+/* ================= leaderboard ================= */
+function getLeaderboard(){
+  if(remote && remote.leaderboard) return remote.leaderboard;
+  try{ return JSON.parse(localStorage.getItem('t67p_leaderboard')||'[]'); }catch(e){ return []; }
+}
 function getRecord(){ const b = getLeaderboard(); return b.length ? b[0] : null; }
 function renderLeaderboard(){
   const board = getLeaderboard();
+  if(lbScope){
+    // Three cases, kept honest: no host configured at all; host unreachable but
+    // still showing the board we last synced; or live.
+    lbScope.textContent = !SCORE_SERVER      ? '(เก็บในเครื่องนี้เท่านั้น)'
+                        : (netFailed&&remote)? '(ออฟไลน์ — คะแนนล่าสุดที่ซิงก์ไว้)'
+                        : netFailed          ? '(ออฟไลน์ — ใช้คะแนนในเครื่องนี้)'
+                                             : '(รวมทุกเครื่องในงาน)';
+    lbScope.style.color = netFailed ? 'var(--coral)' : '';
+  }
   if(board.length===0){
     lbList.innerHTML = '<div class="lb-empty">ยังไม่มีใครส่งคะแนน — เล่นให้จบรอบเพื่อขึ้นบอร์ด!</div>';
     hudRecord.textContent = 'ยังไม่มี';
     return;
   }
   lbList.innerHTML = board.slice(0,5).map((e,i)=>
-    `<div class="lb-row"><span class="rk">#${i+1}</span><span class="nm">${escapeHtml(e.name||'ผู้เล่นนิรนาม')}</span><span class="sc num">${e.count}</span></div>`
+    `<div class="lb-row"><span class="rk">#${i+1}</span><span class="nm">${escapeHtml(e.name||'ผู้เล่นนิรนาม')}</span><span class="sc num">${Number(e.count)||0}</span></div>`
   ).join('');
   hudRecord.textContent = `${board[0].count} จังหวะ`;
 }
@@ -104,7 +240,7 @@ function submitScore(name){
   const board = getLeaderboard();
   board.push({ name: (name||'').trim().slice(0,16), count, ts: Date.now() });
   board.sort((a,b)=> b.count - a.count);
-  localStorage.setItem('t67p_leaderboard', JSON.stringify(board.slice(0,10)));
+  store('t67p_leaderboard', JSON.stringify(board.slice(0,10)));
   renderLeaderboard();
 }
 
@@ -157,21 +293,89 @@ function stopSessionTimer(){
   if(sessionTimerInterval) clearInterval(sessionTimerInterval);
   sessionTimerInterval = null;
 }
+function stopCountdown(){
+  if(countdownInterval) clearInterval(countdownInterval);
+  countdownInterval = null;
+  timerBadge.classList.remove('countdown');
+  if(timerLbl) timerLbl.textContent = 'วินาที';
+}
+
+// COUNTDOWN sits between "a player is in frame" and the clock actually starting.
+function startCountdown(){
+  if(sessionState !== 'WAITING') return;
+  stopCountdown();          // must clear any previous one BEFORE styling this one,
+                            // since stopCountdown resets the badge class and label
+  sessionState = 'COUNTDOWN';
+  let left = COUNTDOWN_SECS;
+  timerBadge.style.display = 'flex';
+  timerBadge.classList.remove('low');
+  timerBadge.classList.add('countdown');
+  if(timerLbl) timerLbl.textContent = 'เตรียมตัว';
+  timerNum.textContent = left;
+  hintLine.textContent = 'เตรียมตัว! ยกมือขึ้นให้พร้อม';
+  hintLine.style.display = 'block';
+  tone(660, 0.10, 'triangle', 0.05);
+  // Derived from the clock, not from counting ticks: a throttled timer (hidden
+  // tab, heavy inference load) would otherwise leave the booth stuck showing "1".
+  const startedAt = Date.now();
+  let shown = left;
+  countdownInterval = setInterval(()=>{
+    const remain = COUNTDOWN_SECS - Math.floor((Date.now() - startedAt)/1000);
+    if(remain <= 0){
+      stopCountdown();
+      hintLine.style.display = 'none';
+      tone(990, 0.22, 'triangle', 0.06);
+      startSessionTimer();
+      return;
+    }
+    if(remain !== shown){ shown = remain; timerNum.textContent = remain; tone(660, 0.10, 'triangle', 0.05); }
+  }, 150);
+}
+
+// The player stepped out before the clock started — go back to waiting for them.
+function cancelCountdown(){
+  if(sessionState !== 'COUNTDOWN') return;
+  stopCountdown();
+  sessionState = 'WAITING';
+  timerBadge.style.display = 'none';
+  timerNum.textContent = SESSION_DURATION;
+}
+
+// Elapsed play time, excluding any spell where the camera stopped delivering.
+// Counting interval ticks instead would make every player's "60 seconds" a
+// different length, since setInterval drifts under the inference load and is
+// throttled hard in a background tab — unfair on a leaderboard.
+function roundElapsedMs(){
+  if(roundStartAt === null) return 0;
+  const open = pauseStartedAt ? (Date.now() - pauseStartedAt) : 0;
+  return Date.now() - roundStartAt - pausedMs - open;
+}
+function pauseRound(){
+  if(sessionState !== 'RUNNING' || pauseStartedAt !== null) return;
+  pauseStartedAt = Date.now();
+}
+function resumeRound(){
+  if(pauseStartedAt === null) return;
+  pausedMs += Date.now() - pauseStartedAt;
+  pauseStartedAt = null;
+}
 
 function startSessionTimer(){
   sessionState = 'RUNNING';
+  roundStartAt = Date.now();
+  pausedMs = 0; pauseStartedAt = null;
   timeLeft = SESSION_DURATION;
   timerBadge.classList.remove('low');
   updateTimerDisplay();
-  stopSessionTimer();
+  stopSessionTimer(); stopCountdown();
   sessionTimerInterval = setInterval(()=>{
-    timeLeft -= 1;
+    timeLeft = Math.max(0, SESSION_DURATION - Math.floor(roundElapsedMs()/1000));
     updateTimerDisplay();
     if(timeLeft <= 0){
-      stopSessionTimer();
+      stopSessionTimer(); stopCountdown();
       if(sessionState === 'RUNNING') endSession('TIMEUP');
     }
-  }, 1000);
+  }, 250);   // finer than 1s so the visible number tracks the real clock
 }
 function updateTimerDisplay(){
   timerNum.textContent = Math.max(0, timeLeft);
@@ -181,18 +385,24 @@ function updateTimerDisplay(){
 function endSession(reason){
   if(sessionState === 'ENDED') return;
   sessionState = 'ENDED';
-  stopSessionTimer();
+  stopSessionTimer(); stopCountdown();
   timerBadge.style.display = 'none';
 
   const record = getRecord();
   const isNewRecord = count > 0 && (!record || count > record.count);
 
-  if(count >= TREE_MAX){
+  // Bank the round locally now; it is sent to the shared board when the player
+  // picks บันทึกคะแนน or ข้าม. Kept separately so an offline booth still tallies.
+  lastRoundReps = count;
+  lastRoundPlanted = count >= TREE_MAX;
+  pendingCommunityDelta += count;   // shown immediately; cleared once the host confirms
+  communityTotal += count;
+  store('t67p_communityTotal', communityTotal);
+  if(lastRoundPlanted){
     treesPlantedToday += 1;
-    localStorage.setItem('t67p_treesToday', treesPlantedToday);
-    statTrees.textContent = treesPlantedToday;
-    communityTotalEl.textContent = `${communityTotal} จังหวะ · ปลูกสำเร็จ ${treesPlantedToday} ต้น`;
+    store('t67p_treesToday', treesPlantedToday);
   }
+  updateCommunityLine();
 
   successEmoji.textContent = isNewRecord ? '🏆🌲' : '⏱️🌳';
   successTitle.textContent = `หมดเวลา ${SESSION_DURATION} วินาที!`;
@@ -210,18 +420,29 @@ function finishSuccess(submitted){
 }
 // An empty name box means the player did not want to be on the board: send them
 // back to the idle screen without recording anything, same as pressing ข้าม.
-lbSubmitBtn.addEventListener('click', ()=>{
-  const nm = lbName.value.trim();
-  if(!nm){ finishSuccess(false); return; }
-  submitScore(nm); finishSuccess(true);
-});
-lbSkipBtn.addEventListener('click', ()=> finishSuccess(false));
+// Either button ends the round the same way; a name is the only difference.
+// The push is deliberately not awaited: a slow or dead network must never make
+// the booth hang between players.
+function finishRound(name){
+  if(name) submitScore(name);          // local copy, so an offline booth still has a board
+  // Not awaited — the booth must hand over to the next player immediately — but
+  // the result still drives an honest message rather than a blanket "saved".
+  pushRound(name, lastRoundReps, lastRoundPlanted).then(ok=>{
+    if(!name)                  showToast('👋','ข้ามการบันทึกคะแนน','พร้อมสำหรับคนถัดไปแล้ว');
+    else if(ok)                showToast('🏆','ส่งขึ้นกระดานแล้ว', name);
+    else if(SCORE_SERVER)      showToast('📶','ออฟไลน์ — เก็บไว้ส่งภายหลัง', name);
+    else                       showToast('💾','บันทึกในเครื่องนี้แล้ว', name);
+  });
+  finishSuccess(!!name);
+}
+lbSubmitBtn.addEventListener('click', ()=> finishRound(lbName.value.trim()));
+lbSkipBtn.addEventListener('click', ()=> finishRound(''));
 
 /* ================= idle screen ================= */
 // The resting state between players: preview + leaderboard, nothing counting.
 function showIdle(replay){
   sessionState = 'IDLE';
-  stopSessionTimer();
+  stopSessionTimer(); stopCountdown();
   const rec = getRecord();
   idleTitle.textContent = replay ? 'จบรอบแล้ว — เล่นอีกไหม?' : 'พร้อมปลูกป่าหรือยัง?';
   idleNote.textContent = rec ? `สถิติสูงสุดของบูธตอนนี้ ${rec.count} จังหวะ` : 'ยังไม่มีสถิติของบูธ — มาเป็นคนแรกกันเลย!';
@@ -233,8 +454,20 @@ function showIdle(replay){
 }
 // Arms the round. The clock still waits for the camera to actually see someone.
 function startPlaying(){
+  if(sessionState !== 'IDLE') return;      // ignore double presses
+  // Starting a round with no camera would just strand the player until the
+  // walk-away timer fired, with nothing explaining why.
+  if(!cameraAlive()){
+    showCamTrouble('กล้องยังไม่พร้อม — รอสักครู่ หรือกด "รีสตาร์ทกล้อง"');
+    showToast('📷','ยังเปิดกล้องไม่ได้','รอกล้องกลับมาก่อนเริ่มเล่น');
+    return;
+  }
   idleOverlay.classList.remove('show');
   wristL=newWristTracker(); wristR=newWristTracker();
+  // Reset the walk-away clock: nobody is tracked while idling, so a stale value
+  // would abort the round the instant it starts.
+  lastPersonSeenTime = performance.now();
+  lastRepTime = 0;
   sessionState = 'WAITING';
   hintLine.textContent=`ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา ${SESSION_DURATION} วิทันทีที่กล้องจับตัวได้`;
   hintLine.style.display='block';
@@ -281,12 +514,15 @@ function registerRep(){
   if(sessionState !== 'RUNNING') return;
   const now = performance.now();
   if(now - lastRepTime < REP_COOLDOWN_MS) return;
+  // A pause longer than COMBO_BREAK_MS ends the run, so "คอมโบสูงสุด" means the
+  // longest unbroken burst rather than just mirroring the total.
+  comboStreak = (now - lastRepTime > COMBO_BREAK_MS) ? 1 : comboStreak + 1;
   lastRepTime = now;
-  count += 1; comboStreak += 1;
+  count += 1;
   if(comboStreak > bestCombo) bestCombo = comboStreak;
   hudCount.textContent = count; statTotal.textContent = count; statBest.textContent = bestCombo;
-  communityTotal += 1; localStorage.setItem('t67p_communityTotal', communityTotal);
-  communityTotalEl.textContent = `${communityTotal} จังหวะ · ปลูกสำเร็จ ${treesPlantedToday} ต้น`;
+  // The running total is added once when the round ends, not written per rep.
+  updateCommunityLine();
   playCountTone(); updateTree(); hintLine.style.display='none';
 }
 
@@ -296,9 +532,14 @@ function processPose(landmarks){
   if(sessionState === 'ENDED' || sessionState === 'IDLE'){ swingMeter.style.display='none'; return; }
   if(!landmarks){
     swingMeter.style.display='none';
+    cancelCountdown();     // stepped out before the clock started
     if(sessionState==='WAITING'){ hintLine.textContent=`ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา ${SESSION_DURATION} วิทันทีที่กล้องจับตัวได้`; hintLine.style.display='block'; }
     return;
   }
+  // A body is visible: that alone is what the walk-away timer asks about. The
+  // stricter quality gates below decide whether reps COUNT, but must never make
+  // the booth tell a player standing in front of it that nobody is there.
+  lastPersonSeenTime = performance.now();
   const shMid = { x:(landmarks[L_SH].x+landmarks[R_SH].x)/2, y:(landmarks[L_SH].y+landmarks[R_SH].y)/2 };
   const hipMid = { x:(landmarks[L_HIP].x+landmarks[R_HIP].x)/2, y:(landmarks[L_HIP].y+landmarks[R_HIP].y)/2 };
   const torsoLen = Math.hypot(shMid.x-hipMid.x, shMid.y-hipMid.y);
@@ -313,14 +554,12 @@ function processPose(landmarks){
     return;
   }
 
-  lastPersonSeenTime = performance.now();
   hintLine.style.display='none';
   swingMeter.style.display='flex';
 
-  if(sessionState === 'WAITING'){
-    timerBadge.style.display='flex';
-    startSessionTimer();
-  }
+  // Seeing a player does not start the clock straight away — a short "get ready"
+  // gives them time to plant their feet and raise their hands first.
+  if(sessionState === 'WAITING') startCountdown();
 
   const devL = processWrist(wristL, landmarks[L_WR], torsoLen, shMid.y, registerRep);
   const devR = processWrist(wristR, landmarks[R_WR], torsoLen, shMid.y, registerRep);
@@ -355,26 +594,112 @@ function drawPose(landmarks){
 }
 
 /* ================= main loop ================= */
+// True only while the webcam track is actually delivering. A unplugged or
+// device-grabbed camera leaves video.srcObject in place but the track 'ended'.
+function cameraAlive(){
+  const s = video.srcObject;
+  if(!s) return false;
+  const t = s.getVideoTracks()[0];
+  return !!t && t.readyState === 'live';
+}
+
+function showCamTrouble(msg){
+  if(camMsg) camMsg.textContent = msg;
+  if(camPlaceholder) camPlaceholder.style.display = 'flex';
+}
+function hideCamTrouble(){
+  // Guarded: this runs every frame, and writing style unconditionally would churn
+  // the DOM sixty times a second for nothing.
+  if(camPlaceholder && camPlaceholder.style.display !== 'none') camPlaceholder.style.display = 'none';
+}
+
+// Brings the camera back without help from staff. Throttled so a permanently
+// missing device cannot spin the machine.
+async function recoverCamera(){
+  if(camRecovering) return;
+  const now = performance.now();
+  if(now - lastCamTryAt < CAM_RETRY_MS) return;
+  camRecovering = true; lastCamTryAt = now;
+  showCamTrouble('กล้องหลุด — กำลังเชื่อมต่อใหม่…');
+  try{
+    if(video.srcObject){
+      try{ video.srcObject.getTracks().forEach(t=>t.stop()); }catch(e){}
+      video.srcObject = null;
+    }
+    await openCamera();
+    loopErrors = 0;
+    hideCamTrouble();
+    showToast('📷','กล้องกลับมาแล้ว','เล่นต่อได้เลย');
+  }catch(e){
+    showCamTrouble('กล้องหลุด — ตรวจสอบสายกล้อง แล้วกด "รีสตาร์ทกล้อง"');
+  }finally{
+    camRecovering = false;
+  }
+}
+
+// Someone pressed play then walked off, or stepped out mid-round. Hand the booth
+// back to the idle screen instead of running a dead round to completion.
+function abortRound(){
+  stopSessionTimer(); stopCountdown();
+  sessionState = 'ENDED';       // blocks any further counting during the reset
+  resetRound(false);
+  showToast('👋','ยกเลิกรอบนี้แล้ว','ไม่พบผู้เล่นหน้ากล้อง');
+}
+
 function loop(){
   if(!running) return;
-  if(video.readyState >= 2){
-    const t0 = performance.now();
-    const result = poseLandmarker.detectForVideo(video, t0);
-    const t1 = performance.now();
-    const frameMs = t1 - t0;
-    latencyEMA = latencyEMA===null ? frameMs : latencyEMA*0.9 + frameMs*0.1;
-    latencyVal.textContent = latencyEMA.toFixed(1);
-    const fps = latencyEMA>0 ? Math.min(60, Math.round(1000/Math.max(latencyEMA,1))) : 0;
-    fpsVal.textContent = fps;
-    fpsPill.textContent = `${latencyEMA.toFixed(0)} ms/frame`;
+  try{
+    // A stalled camera is the dangerous case: the track still says 'live' and
+    // nothing throws, so without a frame-progress check the booth would sit on a
+    // frozen picture all day looking perfectly healthy.
+    const stalled = (performance.now() - lastFrameAdvanceAt) > CAM_STALL_MS;
+    if(!cameraAlive() || stalled){
+      if(stalled) loopErrors = 0;          // it is not the detector's fault
+      // Freeze the round clock: a hardware blip must not eat the player's time.
+      pauseRound();
+      recoverCamera();
+    } else if(video.readyState >= 2){
+      resumeRound();
+      if(video.currentTime !== lastVideoTime){
+        lastVideoTime = video.currentTime;
+        lastFrameAdvanceAt = performance.now();
+      }
+      hideCamTrouble();
+      const t0 = performance.now();
+      const result = poseLandmarker.detectForVideo(video, t0);
+      const t1 = performance.now();
+      const frameMs = t1 - t0;
+      latencyEMA = latencyEMA===null ? frameMs : latencyEMA*0.9 + frameMs*0.1;
+      latencyVal.textContent = latencyEMA.toFixed(1);
+      const fps = latencyEMA>0 ? Math.min(60, Math.round(1000/Math.max(latencyEMA,1))) : 0;
+      fpsVal.textContent = fps;
+      fpsPill.textContent = `${latencyEMA.toFixed(0)} ms/frame`;
 
-    const landmarks = (result.landmarks && result.landmarks[0]) ? result.landmarks[0] : null;
-    drawPose(landmarks);
-    processPose(landmarks);
-  }
-  if(startTime){
-    const secs = Math.floor((Date.now()-startTime)/1000);
-    statTime.textContent = Math.floor(secs/60)+':'+String(secs%60).padStart(2,'0');
+      const landmarks = (result.landmarks && result.landmarks[0]) ? result.landmarks[0] : null;
+      drawPose(landmarks);
+      processPose(landmarks);
+      loopErrors = 0;
+    } else {
+      // Camera present but not yet delivering — never leave this state silent.
+      showCamTrouble('กำลังเตรียมกล้อง…');
+    }
+
+    // Give up on a round nobody is playing.
+    if((sessionState === 'RUNNING' || sessionState === 'WAITING' || sessionState === 'COUNTDOWN') &&
+       performance.now() - lastPersonSeenTime > ABANDON_MS){
+      abortRound();
+    }
+
+    if(roundStartAt !== null){
+      const secs = Math.floor(roundElapsedMs()/1000);
+      statTime.textContent = Math.floor(secs/60)+':'+String(secs%60).padStart(2,'0');
+    }
+  }catch(err){
+    // One bad frame must never end the booth's day. Rescheduling happens below,
+    // outside this catch, so the loop always survives.
+    loopErrors++;
+    if(loopErrors === 1 || loopErrors % 120 === 0) console.error('frame failed', err);
+    if(loopErrors > 90){ loopErrors = 0; recoverCamera(); }
   }
   rafId = requestAnimationFrame(loop);
 }
@@ -396,8 +721,21 @@ async function initModel(){
 async function openCamera(){
   const stream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:'user', width:{ideal:1280}, height:{ideal:720} }, audio:false });
   video.srcObject = stream;
-  await new Promise(res=>{ video.onloadedmetadata=()=>{ video.play(); res(); }; });
-  overlay.width = video.videoWidth; overlay.height = video.videoHeight;
+  // Never await a metadata event unconditionally: it may already have fired, or
+  // may never fire on a faulty device, and an unsettled promise would freeze the
+  // booth on the loading screen with no error shown.
+  await new Promise(res=>{
+    if(video.readyState >= 1) return res();
+    const done = ()=>{ video.removeEventListener('loadedmetadata', done); res(); };
+    video.addEventListener('loadedmetadata', done);
+    setTimeout(done, 6000);
+  });
+  try{ await video.play(); }catch(e){ /* autoplay policy: frames still decode */ }
+  overlay.width  = video.videoWidth  || 1280;
+  overlay.height = video.videoHeight || 720;
+  // Re-arm the stall watchdog, or it would fire on the very first frame.
+  lastVideoTime = -1;
+  lastFrameAdvanceAt = performance.now();
 }
 
 async function startKiosk(){
@@ -405,7 +743,7 @@ async function startKiosk(){
   try{
     if(!poseLandmarker) await initModel();
     await openCamera();
-    running=true; startTime=Date.now(); lastPersonSeenTime=performance.now();
+    running=true; lastPersonSeenTime=performance.now();
     hud.style.display='flex';
     powerOverlay.style.display='none';
     showIdle(false);   // land on the resting screen, not straight into a round
@@ -416,10 +754,29 @@ async function startKiosk(){
     powerBtn.disabled=false; powerBtn.textContent='▶ เปิดกล้อง เริ่มบูธ';
   }
 }
+// Staff button. Tears the stream down and back up; on failure the loop is left
+// running so the automatic retry in recoverCamera() keeps trying on its own.
 async function restartCamera(){
-  running=false; if(rafId) cancelAnimationFrame(rafId);
-  if(video.srcObject){ video.srcObject.getTracks().forEach(t=>t.stop()); video.srcObject=null; }
-  try{ await openCamera(); running=true; lastPersonSeenTime=performance.now(); loop(); }catch(e){ console.error('restart failed', e); }
+  if(camRecovering) return;
+  camRecovering = true;
+  showCamTrouble('กำลังรีสตาร์ทกล้อง…');
+  try{
+    if(video.srcObject){
+      try{ video.srcObject.getTracks().forEach(t=>t.stop()); }catch(e){}
+      video.srcObject = null;
+    }
+    await openCamera();
+    loopErrors = 0; lastPersonSeenTime = performance.now();
+    hideCamTrouble();
+    showToast('📷','กล้องพร้อมแล้ว','เริ่มรอบใหม่ได้เลย');
+  }catch(e){
+    console.error('restart failed', e);
+    showCamTrouble('เปิดกล้องไม่ได้ — ตรวจสอบสายกล้องแล้วลองอีกครั้ง');
+  }finally{
+    camRecovering = false;
+    lastCamTryAt = performance.now();
+    if(!running){ running = true; loop(); }   // never leave the booth stopped
+  }
 }
 function resetRound(showToastMsg){
   // Also clears the end-of-round panel, so the staff "เริ่มรอบใหม่" button can
@@ -428,19 +785,39 @@ function resetRound(showToastMsg){
   count=0; bestCombo=0; comboStreak=0; currentStage=0;
   wristL=newWristTracker(); wristR=newWristTracker();
   timeLeft=SESSION_DURATION;
-  stopSessionTimer();
+  stopSessionTimer(); stopCountdown();
   timerBadge.style.display='none'; timerBadge.classList.remove('low'); timerNum.textContent=SESSION_DURATION;
-  startTime = running ? Date.now() : null;
+  roundStartAt = null;   // stop the round clock; the last value stays on screen
   hudCount.textContent=0;
   statTotal.textContent=0; statBest.textContent=0; statTime.textContent='0:00';
   setTreeStage(0);
   progressFill.style.width='0%'; progressText.textContent='0 จังหวะ'; liveCountBig.textContent='0 จังหวะ';
   // Back to the resting screen — never straight into another round.
   showIdle(!!showToastMsg);
-  if(showToastMsg){ showToast('👋','บันทึกรอบนี้เรียบร้อย','กด "เล่นอีกครั้ง" เมื่อพร้อมสำหรับคนถัดไป'); }
+  // The outcome toast is raised by finishRound(), which knows whether the score
+  // was actually sent, merely queued, or skipped — this one must not claim "saved".
 }
 
 powerBtn.addEventListener('click', ()=>{ ensureAudio(); startKiosk(); });
 restartCamBtn.addEventListener('click', restartCamera);
 resetRoundBtn.addEventListener('click', ()=> resetRound(false));
-soundToggle.addEventListener('click', ()=>{ soundOn=!soundOn; soundToggle.classList.toggle('on', soundOn); });
+soundToggle.addEventListener('click', ()=>{
+  soundOn = !soundOn;
+  soundToggle.classList.toggle('on', soundOn);
+  soundToggle.setAttribute('aria-checked', soundOn ? 'true' : 'false');
+});
+
+// A hidden tab stops requestAnimationFrame, so no rep can be detected and the
+// round would be unwinnable. Hand it back rather than let it run out unseen.
+document.addEventListener('visibilitychange', ()=>{
+  if(document.hidden && (sessionState==='RUNNING' || sessionState==='COUNTDOWN' || sessionState==='WAITING')){
+    abortRound();
+  }
+});
+
+// Pick up scores from the other booths, but only while idle — never mid-round,
+// where a network hiccup could stutter the detection loop.
+if(SCORE_SERVER){
+  pullState();
+  setInterval(()=>{ if(sessionState === 'IDLE') pullState(); }, 5000);
+}

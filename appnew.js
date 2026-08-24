@@ -7,7 +7,15 @@ const VISION_BUNDLE = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10
 /* ================= config ================= */
 const TREE_STAGE_NEEDS = [0, 10, 25, 50, 100, 125]; // reps needed for each visual growth stage (no labels/levels shown to player)
 const TREE_MAX = TREE_STAGE_NEEDS[TREE_STAGE_NEEDS.length - 1];
-const SESSION_DURATION = 60; // seconds — tree grows live while you do the 67 move
+/* Round length is chosen on the idle screen, so it is a variable rather than a
+   constant: 30 s keeps a queue moving on a busy day, 60 s suits a quiet one.
+   The choice is remembered, because a booth gets reloaded and nobody wants to
+   re-pick it every time. Only these two values are accepted — a stored value
+   from an older build (or a hand-edited one) falls back to the default. */
+const DURATION_OPTIONS = [30, 60];
+const DEFAULT_DURATION = 30;
+let sessionDuration = Number(localStorage.getItem('t67p_duration'));
+if(!DURATION_OPTIONS.includes(sessionDuration)) sessionDuration = DEFAULT_DURATION;
 function stageForCount(c){ let s = 0; for(let i=0;i<TREE_STAGE_NEEDS.length;i++){ if(c >= TREE_STAGE_NEEDS[i]) s = i; } return s; }
 // Pose landmark indices (BlazePose / MediaPipe Pose, 33 keypoints)
 const L_SH=11, R_SH=12, L_HIP=23, R_HIP=24, L_WR=15, R_WR=16, L_EL=13, R_EL=14;
@@ -47,12 +55,12 @@ let latencyEMA = null;
 let treesPlantedToday = Number(localStorage.getItem('t67p_treesToday') || 0);
 let communityTotal = Number(localStorage.getItem('t67p_communityTotal') || 0);
 
-// timed challenge session (SESSION_DURATION seconds)
+// timed challenge session (sessionDuration seconds)
 // IDLE is the booth's resting screen: camera preview and leaderboard on show, but
 // nothing counting. A round only begins when someone presses the play button, so
 // the booth never starts a round just because a person walked into frame.
 let sessionState = 'IDLE'; // IDLE -> WAITING -> RUNNING -> ENDED -> IDLE
-let timeLeft = SESSION_DURATION;
+let timeLeft = sessionDuration;
 let sessionTimerInterval = null;
 
 // per-wrist adaptive extremum + hysteresis state
@@ -74,9 +82,14 @@ const statTotal=$('statTotal'), statBest=$('statBest'), statTime=$('statTime'), 
 const communityTotalEl=$('communityTotal'), soundToggle=$('soundToggle'), toastZone=$('toast-zone');
 const treeGroups=document.querySelectorAll('.tree-group');
 const restartCamBtn=$('restartCamBtn'), resetRoundBtn=$('resetRoundBtn'), lbList=$('lbList');
-const idleOverlay=$('idleOverlay'), idleTitle=$('idleTitle'), idleNote=$('idleNote'), playBtn=$('playBtn');
+const idleOverlay=$('idleOverlay'), idleTitle=$('idleTitle'), idleNote=$('idleNote'), idleHint=$('idleHint'), playBtn=$('playBtn');
+// Both screens carry their own copy of the picker; they are wired together so
+// there is still only one round length, wherever the staff happen to set it.
+const durationPicks=[...document.querySelectorAll('.duration-pick')], lbDurLabel=$('lbDurLabel');
 
 statTrees.textContent = treesPlantedToday;
+timerNum.textContent = sessionDuration;
+renderDurationPick();
 communityTotalEl.textContent = `${communityTotal} จังหวะ · ปลูกสำเร็จ ${treesPlantedToday} ต้น`;
 setTreeStage(0); renderLeaderboard();
 
@@ -85,12 +98,25 @@ function setTreeStage(stage){
 }
 
 /* ================= leaderboard (local only) ================= */
-function getLeaderboard(){ try{ return JSON.parse(localStorage.getItem('t67p_leaderboard')||'[]'); }catch(e){ return []; } }
-function getRecord(){ const b = getLeaderboard(); return b.length ? b[0] : null; }
+// A 30 s score and a 60 s score are not the same achievement, so each round
+// length keeps its own board and its own record. Mixing them would make the
+// booth record meaningless the moment anyone switched.
+const LB_KEY = d => `t67p_leaderboard_${d}`;
+// Scores set before the length was selectable land on the 30 s board, so the
+// booth's existing record is carried over instead of silently disappearing.
+(function migrateLegacyBoard(){
+  const legacy = localStorage.getItem('t67p_leaderboard');
+  if(legacy === null) return;
+  if(localStorage.getItem(LB_KEY(DEFAULT_DURATION)) === null) localStorage.setItem(LB_KEY(DEFAULT_DURATION), legacy);
+  localStorage.removeItem('t67p_leaderboard');
+})();
+function getLeaderboard(d = sessionDuration){ try{ return JSON.parse(localStorage.getItem(LB_KEY(d))||'[]'); }catch(e){ return []; } }
+function getRecord(d = sessionDuration){ const b = getLeaderboard(d); return b.length ? b[0] : null; }
 function renderLeaderboard(){
   const board = getLeaderboard();
+  lbDurLabel.textContent = `รอบ ${sessionDuration} วิ`;
   if(board.length===0){
-    lbList.innerHTML = '<div class="lb-empty">ยังไม่มีใครส่งคะแนน — เล่นให้จบรอบเพื่อขึ้นบอร์ด!</div>';
+    lbList.innerHTML = `<div class="lb-empty">ยังไม่มีใครส่งคะแนนของรอบ ${sessionDuration} วินาที — เล่นให้จบรอบเพื่อขึ้นบอร์ด!</div>`;
     hudRecord.textContent = 'ยังไม่มี';
     return;
   }
@@ -104,7 +130,7 @@ function submitScore(name){
   const board = getLeaderboard();
   board.push({ name: (name||'').trim().slice(0,16), count, ts: Date.now() });
   board.sort((a,b)=> b.count - a.count);
-  localStorage.setItem('t67p_leaderboard', JSON.stringify(board.slice(0,10)));
+  localStorage.setItem(LB_KEY(sessionDuration), JSON.stringify(board.slice(0,10)));
   renderLeaderboard();
 }
 
@@ -160,7 +186,7 @@ function stopSessionTimer(){
 
 function startSessionTimer(){
   sessionState = 'RUNNING';
-  timeLeft = SESSION_DURATION;
+  timeLeft = sessionDuration;
   timerBadge.classList.remove('low');
   updateTimerDisplay();
   stopSessionTimer();
@@ -195,7 +221,7 @@ function endSession(reason){
   }
 
   successEmoji.textContent = isNewRecord ? '🏆🌲' : '⏱️🌳';
-  successTitle.textContent = `หมดเวลา ${SESSION_DURATION} วินาที!`;
+  successTitle.textContent = `หมดเวลา ${sessionDuration} วินาที!`;
   successDesc.innerHTML = `ทำได้ <b class="num" id="successCount">${count}</b> จังหวะ`
     + (isNewRecord ? ` — <b style="color:var(--gold)">ทำลายสถิติสูงสุดของบูธนี้!</b> 🎉` : record ? ` — สถิติสูงสุดของบูธตอนนี้คือ <b class="num">${record.count}</b> จังหวะ ลองเอาชนะดูใหม่!` : ` — เป็นคนแรกที่ตั้งสถิติของบูธนี้!`)
     + ` ส่งคะแนนขึ้นกระดานได้เลย (ไม่ส่งข้อมูลออกนอกเครื่อง)`;
@@ -217,15 +243,42 @@ lbSubmitBtn.addEventListener('click', ()=>{
 });
 lbSkipBtn.addEventListener('click', ()=> finishSuccess(false));
 
+/* ================= round length picker ================= */
+function renderDurationPick(){
+  durationPicks.forEach(pick => pick.querySelectorAll('.dur-btn').forEach(b =>
+    b.classList.toggle('sel', Number(b.dataset.sec) === sessionDuration)));
+}
+function setDuration(sec){
+  if(!DURATION_OPTIONS.includes(sec) || sec === sessionDuration) return;
+  sessionDuration = sec;
+  localStorage.setItem('t67p_duration', sec);
+  timeLeft = sessionDuration;
+  timerNum.textContent = sessionDuration;
+  renderDurationPick();
+  renderLeaderboard();                       // board and record are per length
+  if(running && sessionState === 'IDLE') showIdle(idleReplay);  // re-word the idle copy
+}
+// The buttons only exist on the idle screen, but the state check means a stray
+// click can never move the clock out from under a round that is already running.
+durationPicks.forEach(pick => pick.addEventListener('click', e => {
+  const b = e.target.closest('.dur-btn');
+  if(!b || sessionState !== 'IDLE') return;
+  setDuration(Number(b.dataset.sec));
+}));
+
 /* ================= idle screen ================= */
 // The resting state between players: preview + leaderboard, nothing counting.
+let idleReplay = false;
 function showIdle(replay){
   sessionState = 'IDLE';
   stopSessionTimer();
+  idleReplay = replay;
   const rec = getRecord();
   idleTitle.textContent = replay ? 'จบรอบแล้ว — เล่นอีกไหม?' : 'พร้อมปลูกป่าหรือยัง?';
-  idleNote.textContent = rec ? `สถิติสูงสุดของบูธตอนนี้ ${rec.count} จังหวะ` : 'ยังไม่มีสถิติของบูธ — มาเป็นคนแรกกันเลย!';
+  idleNote.textContent = rec ? `สถิติสูงสุดของรอบ ${sessionDuration} วิ ตอนนี้ ${rec.count} จังหวะ` : `ยังไม่มีสถิติของรอบ ${sessionDuration} วิ — มาเป็นคนแรกกันเลย!`;
+  idleHint.textContent = `ยืนให้เห็นหัวไหล่ถึงสะโพก เลือกความยาวรอบ แล้วกดปุ่มเพื่อเริ่มจับเวลา ${sessionDuration} วินาที`;
   playBtn.textContent = replay ? '▶ เล่นอีกครั้ง' : '▶ เริ่มเล่น';
+  renderDurationPick();
   hintLine.style.display='none';
   swingMeter.style.display='none';
   timerBadge.style.display='none';
@@ -236,7 +289,7 @@ function startPlaying(){
   idleOverlay.classList.remove('show');
   wristL=newWristTracker(); wristR=newWristTracker();
   sessionState = 'WAITING';
-  hintLine.textContent=`ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา ${SESSION_DURATION} วิทันทีที่กล้องจับตัวได้`;
+  hintLine.textContent=`ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา ${sessionDuration} วิทันทีที่กล้องจับตัวได้`;
   hintLine.style.display='block';
 }
 playBtn.addEventListener('click', ()=>{ ensureAudio(); startPlaying(); });
@@ -296,7 +349,7 @@ function processPose(landmarks){
   if(sessionState === 'ENDED' || sessionState === 'IDLE'){ swingMeter.style.display='none'; return; }
   if(!landmarks){
     swingMeter.style.display='none';
-    if(sessionState==='WAITING'){ hintLine.textContent=`ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา ${SESSION_DURATION} วิทันทีที่กล้องจับตัวได้`; hintLine.style.display='block'; }
+    if(sessionState==='WAITING'){ hintLine.textContent=`ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา ${sessionDuration} วิทันทีที่กล้องจับตัวได้`; hintLine.style.display='block'; }
     return;
   }
   const shMid = { x:(landmarks[L_SH].x+landmarks[R_SH].x)/2, y:(landmarks[L_SH].y+landmarks[R_SH].y)/2 };
@@ -427,9 +480,9 @@ function resetRound(showToastMsg){
   successOverlay.classList.remove('show');
   count=0; bestCombo=0; comboStreak=0; currentStage=0;
   wristL=newWristTracker(); wristR=newWristTracker();
-  timeLeft=SESSION_DURATION;
+  timeLeft=sessionDuration;
   stopSessionTimer();
-  timerBadge.style.display='none'; timerBadge.classList.remove('low'); timerNum.textContent=SESSION_DURATION;
+  timerBadge.style.display='none'; timerBadge.classList.remove('low'); timerNum.textContent=sessionDuration;
   startTime = running ? Date.now() : null;
   hudCount.textContent=0;
   statTotal.textContent=0; statBest.textContent=0; statTime.textContent='0:00';

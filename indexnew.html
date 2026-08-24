@@ -15,8 +15,15 @@
 <div id="power-overlay">
   <div class="glyph">🌱</div>
   <h1>67 Speed — <span>ปลูกป่าไปด้วยกัน</span></h1>
-  <p>บูธกล้องตั้งโต๊ะสำหรับงานวันวิทยาศาสตร์ — ยืนให้เห็นตั้งแต่หัวไหล่ถึงสะโพก ทันทีที่กล้องจับตัวได้จะเริ่มจับเวลา <b style="color:var(--leaf)">60 วินาที</b> โยกแขนสองข้างขึ้น-ลงสลับกันตามท่าไวรัล 67 ให้เร็วที่สุด — <b style="color:var(--gold)">ยิ่งทำเยอะ ยิ่งโต ไม่มีขีดจำกัด</b> จนกลายเป็นผืนป่า วัดกันตรงจำนวนจังหวะ ลุ้นทำลายสถิติสูงสุดของบูธนี้!</p>
+  <p>บูธกล้องตั้งโต๊ะสำหรับงานวันวิทยาศาสตร์ — ยืนให้เห็นตั้งแต่หัวไหล่ถึงสะโพก ทันทีที่กล้องจับตัวได้จะเริ่มจับเวลา <b style="color:var(--leaf)">30 หรือ 60 วินาที</b> (เลือกได้ด้านล่าง และเปลี่ยนได้อีกที่หน้าจอพักก่อนเริ่มแต่ละรอบ) โยกแขนสองข้างขึ้น-ลงสลับกันตามท่าไวรัล 67 ให้เร็วที่สุด — <b style="color:var(--gold)">ยิ่งทำเยอะ ยิ่งโต ไม่มีขีดจำกัด</b> จนกลายเป็นผืนป่า วัดกันตรงจำนวนจังหวะ ลุ้นทำลายสถิติสูงสุดของบูธนี้!</p>
   <div class="techline">Powered by MediaPipe Pose Landmarker (33 keypoints, on-device WASM) — ประมวลผลในเบราว์เซอร์ทั้งหมด ไม่มีการอัปโหลดวิดีโอขึ้นเซิร์ฟเวอร์</div>
+  <div class="dur-choose">
+    <span>เลือกความยาวรอบ</span>
+    <div class="duration-pick" id="durationPickPower">
+      <button class="dur-btn" type="button" data-sec="30">30 วินาที</button>
+      <button class="dur-btn" type="button" data-sec="60">60 วินาที</button>
+    </div>
+  </div>
   <button class="btn btn-primary" id="powerBtn">▶ เปิดกล้อง เริ่มบูธ</button>
   <div class="err" id="powerErr"></div>
 </div>
@@ -53,9 +60,9 @@
           </div>
         </div>
 
-        <div class="timer-badge" id="timerBadge"><div class="timer-num" id="timerNum">60</div><div class="timer-lbl">วินาที</div></div>
+        <div class="timer-badge" id="timerBadge"><div class="timer-num" id="timerNum">30</div><div class="timer-lbl">วินาที</div></div>
 
-        <div class="hint-line" id="hintLine" style="display:none;">ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา 60 วิทันทีที่กล้องจับตัวได้</div>
+        <div class="hint-line" id="hintLine" style="display:none;">ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วโยกแขนสองข้างสลับขึ้น-ลง — จับเวลา 30 วิทันทีที่กล้องจับตัวได้</div>
         <div class="swing-meter" id="swingMeter" style="display:none;">
           <div class="half"><i id="swingFillL" style="width:50%"></i></div>
           <div class="half"><i id="swingFillR" style="width:50%"></i></div>
@@ -76,8 +83,12 @@
           <div class="g">🌳</div>
           <h2 id="idleTitle">พร้อมปลูกป่าหรือยัง?</h2>
           <p id="idleNote">ยังไม่มีสถิติของบูธ — มาเป็นคนแรกกันเลย!</p>
+          <div class="duration-pick" id="durationPick">
+            <button class="dur-btn" type="button" data-sec="30">30 วินาที</button>
+            <button class="dur-btn" type="button" data-sec="60">60 วินาที</button>
+          </div>
           <button class="btn btn-primary" id="playBtn">▶ เริ่มเล่น</button>
-          <div class="idle-hint">ยืนให้เห็นหัวไหล่ถึงสะโพก แล้วกดปุ่มเพื่อเริ่มจับเวลา 60 วินาที</div>
+          <div class="idle-hint" id="idleHint">ยืนให้เห็นหัวไหล่ถึงสะโพก เลือกความยาวรอบ แล้วกดปุ่มเพื่อเริ่มจับเวลา</div>
         </div>
 
         <div class="cam-placeholder" id="camPlaceholder" style="display:none;">
@@ -151,7 +162,7 @@
       </div>
 
       <div class="card lb-card">
-        <h2>🏆 กระดานคะแนนบูธนี้ <span style="font-weight:400;">(เก็บในเครื่องนี้เท่านั้น)</span></h2>
+        <h2>🏆 กระดานคะแนน <span id="lbDurLabel" style="color:var(--gold);">รอบ 30 วิ</span> <span style="font-weight:400;">(เก็บในเครื่องนี้เท่านั้น)</span></h2>
         <div id="lbList"><div class="lb-empty">ยังไม่มีใครส่งคะแนน — ปลูกป่าให้สำเร็จเพื่อขึ้นบอร์ด!</div></div>
       </div>
     </div>
@@ -159,7 +170,7 @@
 
   <div class="bottombar">
     <div class="steps">
-      <span><b>1.</b> ยืนห่างกล้อง ให้เห็นไหล่ถึงสะโพก — จับเวลา 60 วิทันที</span>
+      <span><b>1.</b> เลือก 30 หรือ 60 วินาที แล้วยืนห่างกล้อง ให้เห็นไหล่ถึงสะโพก</span>
       <span><b>2.</b> โยกแขนสองข้างสลับขึ้น-ลงต่อเนื่อง ยิ่งทำเยอะ ยิ่งโต</span>
       <span><b>3.</b> ไม่มีจำกัด ยิ่งทำเยอะ ยิ่งเป็นป่าใหญ่ ลุ้นทำลายสถิติของบูธ!</span>
     </div>
